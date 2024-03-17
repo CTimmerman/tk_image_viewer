@@ -2,26 +2,23 @@
 """Tk Image Viewer
 by Cees Timmerman 2024-03-17."""
 
-import logging, pathlib, tkinter
+import logging
+import pathlib
+import tkinter
 
 from PIL import Image, ImageTk  # pip install pillow
 
 
-# logging.basicConfig(level=logging.INFO)
-
-
-antialias_on = False
-bg_colors = ["black", "gray10", "gray50", "white"]
-bg_index = -1
-resize = True
-scale = 1.0
-slideshow_pause = 4000
-slideshow_on = False
+ANTIALIAS_ON = False
+BG_COLORS = ["black", "gray10", "gray50", "white"]
+BG_INDEX = -1
+RESIZE = True
+SCALE = 1.0
+SLIDESHOW_PAUSE = 4000
+SLIDESHOW_ON = False
 TITLE = __doc__.split("\n")[0]
 paths: list[str] = []
-path_index = -1
-image_label = None
-status_label = None
+path_index: int = -1
 
 
 def browse(event=None):
@@ -38,16 +35,18 @@ def browse(event=None):
         path_index = 0
 
     msg = f"Index {path_index + 1}/{len(paths) + 1}"
-    status_label.config(text=msg)
+    STATUS_LABEL.config(text=msg)
     path = paths[path_index]
     show_image(path)
 
 
 def debug_keys(event=None):
+    """Shows all keys."""
     logging.info("KEY: %s", event)
 
 
 def mouse_wheel(event=None):
+    """Handles mouse events."""
     logging.info("MOUSE: %s", event)
     if event.num == 5 or event.delta == -120:
         root.event_generate("<Down>")
@@ -56,11 +55,13 @@ def mouse_wheel(event=None):
 
 
 def close(event=None):
+    """Closes app."""
     event.widget.withdraw()
     event.widget.quit()
 
 
 def refresh_paths(event=None, path="."):
+    """Refreshes path info."""
     global paths
     logging.debug("Reading %s...", path)
     paths = list(pathlib.Path(path).glob("*"))
@@ -68,22 +69,25 @@ def refresh_paths(event=None, path="."):
 
 
 def run_slideshow(event=None):
-    if slideshow_on:
+    """Runs slideshow."""
+    if SLIDESHOW_ON:
         browse()
-        root.after(slideshow_pause, run_slideshow)
+        root.after(SLIDESHOW_PAUSE, run_slideshow)
 
 
 def set_bg(event=None):
-    global bg_index
-    bg_index += 1
-    if bg_index >= len(bg_colors):
-        bg_index = 0
-    bg = bg_colors[bg_index]
+    """Sets background color."""
+    global BG_INDEX
+    BG_INDEX += 1
+    if BG_INDEX >= len(BG_COLORS):
+        BG_INDEX = 0
+    bg = BG_COLORS[BG_INDEX]
     root.config(background=bg)
-    image_label.config(background=bg)
+    IMAGE_LABEL.config(background=bg)
 
 
 def show_image(path):
+    """Shows image."""
     logging.debug("Showing %s", path)
     msg = ""
     try:
@@ -95,46 +99,48 @@ def show_image(path):
 
     if pil_img:
         im_w, im_h = pil_img.size
-        if scale != 1:
-            pil_img = pil_img.resize(
-                (int(scale * im_w), int(scale * im_h)),
-                Image.BICUBIC if antialias_on else None,
+        if SCALE != 1:
+            pil_img = pil_img.RESIZE(
+                (int(SCALE * im_w), int(SCALE * im_h)),
+                Image.BICUBIC if ANTIALIAS_ON else None,
             )
 
         if False:
-            logging.debug(image_label.winfo_geometry())
+            logging.debug(IMAGE_LABEL.winfo_geometry())
             im_w, im_h = pil_img.size
             if im_w > w or im_h > h:
                 ratio = min(w / im_w, h / im_h)
                 im_w = int(im_w * ratio)
                 im_h = int(im_h * ratio)
-                pil_img = pil_img.resize(
-                    (im_w, im_h), Image.BICUBIC if antialias_on else None
+                pil_img = pil_img.RESIZE(
+                    (im_w, im_h), Image.BICUBIC if ANTIALIAS_ON else None
                 )
 
     msg = (
         f"{path_index+1}/{len(paths)} "
-        + (f"{im_w}x{im_h} x{scale:.1f}" if pil_img else msg)
+        + (f"{im_w}x{im_h} x{SCALE:.1f}" if pil_img else msg)
         + f" {path} - {TITLE}"
     )
     root.title(msg)
-    status_label.configure(text=msg)
+    STATUS_LABEL.configure(text=msg)
 
     img = ImageTk.PhotoImage(pil_img) if pil_img else None
-    image_label.config(image=img, text="" if img else msg)  # Set it.
-    image_label.img = img  # Keep it. Why isn't this built in?!
+    IMAGE_LABEL.config(image=img, text="" if img else msg)  # Set it.
+    IMAGE_LABEL.img = img  # Keep it. Why isn't this built in?!
 
 
 def toggle_fullscreen(event=None):
+    """Toggles fullscreen."""
     logging.debug("Toggling fullscreen")
     root.attributes("-fullscreen", not root.attributes("-fullscreen"))
 
 
 def toggle_slideshow(event=None, **kwargs):
+    """Toggles slideshow."""
     print("KWARGS", kwargs)
-    global slideshow_on
-    slideshow_on = not slideshow_on
-    if slideshow_on:
+    global SLIDESHOW_ON
+    SLIDESHOW_ON = not SLIDESHOW_ON
+    if SLIDESHOW_ON:
         logging.info("Starting slideshow.")
         run_slideshow()
     else:
@@ -142,7 +148,8 @@ def toggle_slideshow(event=None, **kwargs):
 
 
 def zoom(event=None):
-    global scale  # noqa
+    """Zooms."""
+    global SCALE  # noqa
     logging.debug("ZOOM: %s", event)
     k = event.keysym if event else "plus"
     if event.num == 5 or event.delta == -120:
@@ -150,15 +157,13 @@ def zoom(event=None):
     if event.num == 4 or event.delta == 120:
         k = "minus"
     if k == "plus":
-        scale *= 1.1
+        SCALE *= 1.1
     elif k == "minus":
-        scale *= 0.9
+        SCALE *= 0.9
     else:
-        scale = 1
-    if scale < 0.1:
-        scale = 0.1
-    if scale >= 8:
-        scale = 8
+        SCALE = 1
+    SCALE = max(SCALE, 0.1)
+    SCALE = min(SCALE, 8)
     show_image(paths[path_index])
 
 
@@ -167,10 +172,10 @@ root.title(TITLE)
 w, h = root.winfo_screenwidth(), root.winfo_screenheight()
 root.geometry(f"{int(w / 2)}x{int(h / 2)}")
 
-image_label = tkinter.Label(root, width=w, height=h, fg="red")
-image_label.pack()
+IMAGE_LABEL = tkinter.Label(root, width=w, height=h, fg="red")
+IMAGE_LABEL.pack()
 
-status_label = tkinter.Label(
+STATUS_LABEL = tkinter.Label(
     root,
     text="status",
     font=("Consolas", 14),
@@ -180,7 +185,7 @@ status_label = tkinter.Label(
     anchor="nw",
     justify="left",
 )
-status_label.pack()
+STATUS_LABEL.pack()
 
 set_bg()
 
@@ -217,7 +222,8 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="An image viewer that supports both arrow keys and WebP with foreign characters in long paths."
+        description="An image viewer that supports both arrow keys and "
+        + "WebP with foreign characters in long paths."
     )
     parser.add_argument("path", default=".", nargs="?")
     parser.add_argument(
@@ -243,7 +249,7 @@ if __name__ == "__main__":
     browse()
 
     if args.slideshow:
-        slideshow_pause = args.slideshow
+        SLIDESHOW_PAUSE = args.slideshow
         toggle_slideshow()
 
     root.mainloop()
