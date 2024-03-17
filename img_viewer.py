@@ -92,7 +92,7 @@ def show_image(path):
     msg = ""
     try:
         pil_img = Image.open(path)
-    except Exception as ex:
+    except PermissionError as ex:
         msg = str(ex)
         logging.error(msg)
         pil_img = None
