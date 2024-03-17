@@ -3,6 +3,7 @@
 by Cees Timmerman 2024-03-17."""
 
 import logging
+import os
 import pathlib
 import tkinter
 
@@ -18,7 +19,7 @@ SLIDESHOW_PAUSE = 4000
 SLIDESHOW_ON = False
 TITLE = __doc__.split("\n")[0]
 paths: list[str] = []
-path_index: int = -1
+path_index: int = 0
 
 
 def browse(event=None):
@@ -250,7 +251,7 @@ if __name__ == "__main__":
         description="An image viewer that supports both arrow keys and "
         + "WebP with foreign characters in long paths."
     )
-    parser.add_argument("path", default=".", nargs="?")
+    parser.add_argument("path", default=os.getcwd(), nargs="?")
     parser.add_argument(
         "-s",
         "--slideshow",
