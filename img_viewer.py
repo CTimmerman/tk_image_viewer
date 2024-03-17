@@ -1,3 +1,4 @@
+# pylint: disable=unused-argument, global-statement, use-maxsplit-arg, using-constant-test
 """Tk Image Viewer
 by Cees Timmerman 2024-03-17."""
 
@@ -17,7 +18,6 @@ scale = 1.0
 slideshow_pause = 4000
 slideshow_on = False
 TITLE = __doc__.split("\n")[0]
-path = None
 paths: list[str] = []
 path_index = -1
 image_label = None
@@ -25,7 +25,8 @@ status_label = None
 
 
 def browse(event=None):
-    global image_label, path_index, status_label
+    """Selects next or previous file."""
+    global path_index
 
     k = event.keysym if event else "Right"
     delta = -1 if k in ("Left", "Up") else 1
@@ -43,27 +44,27 @@ def browse(event=None):
 
 
 def debug_keys(event=None):
-    logging.info(f"KEY: {event}")
+    logging.info("KEY: %s", event)
 
 
 def mouse_wheel(event=None):
-    logging.info(f"MOUSE: {event}")
+    logging.info("MOUSE: %s", event)
     if event.num == 5 or event.delta == -120:
         root.event_generate("<Down>")
     if event.num == 4 or event.delta == 120:
         root.event_generate("<Up>")
 
 
-def quit(event=None):
+def close(event=None):
     event.widget.withdraw()
     event.widget.quit()
 
 
-def refresh_paths(event=None):
+def refresh_paths(event=None, path="."):
     global paths
-    logging.debug(f"Reading {path}...")
+    logging.debug("Reading %s...", path)
     paths = list(pathlib.Path(path).glob("*"))
-    logging.debug(f"Found {len(paths)} files.")
+    logging.debug("Found %s files.", len(paths))
 
 
 def run_slideshow(event=None):
@@ -83,7 +84,7 @@ def set_bg(event=None):
 
 
 def show_image(path):
-    logging.debug(f"Showing {path}")
+    logging.debug("Showing %s", path)
     msg = ""
     try:
         pil_img = Image.open(path)
@@ -141,8 +142,8 @@ def toggle_slideshow(event=None, **kwargs):
 
 
 def zoom(event=None):
-    global scale
-    logging.debug(f"ZOOM: {event}")
+    global scale  # noqa
+    logging.debug("ZOOM: %s", event)
     k = event.keysym if event else "plus"
     if event.num == 5 or event.delta == -120:
         k = "plus"
@@ -164,7 +165,7 @@ def zoom(event=None):
 root = tkinter.Tk()
 root.title(TITLE)
 w, h = root.winfo_screenwidth(), root.winfo_screenheight()
-root.geometry("%dx%d" % (int(w / 2), int(h / 2)))
+root.geometry(f"{int(w / 2)}x{int(h / 2)}")
 
 image_label = tkinter.Label(root, width=w, height=h, fg="red")
 image_label.pack()
@@ -185,7 +186,7 @@ set_bg()
 
 
 root.bind_all("<Key>", debug_keys)
-root.bind("<Escape>", quit)
+root.bind("<Escape>", close)
 
 root.bind("<Return>", toggle_fullscreen)
 root.bind("<F11>", toggle_fullscreen)
@@ -238,8 +239,7 @@ if __name__ == "__main__":
         level = [logging.ERROR, logging.WARN, logging.INFO, logging.DEBUG][args.verbose]
         logging.basicConfig(level=level)
 
-    path = args.path
-    refresh_paths()
+    refresh_paths(path=args.path)
     browse()
 
     if args.slideshow:
