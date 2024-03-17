@@ -6,7 +6,7 @@ import logging
 import pathlib
 import tkinter
 
-from PIL import Image, ImageTk  # pip install pillow
+from PIL import Image, ImageTk, UnidentifiedImageError  # pip install pillow
 
 
 ANTIALIAS_ON = False
@@ -60,12 +60,26 @@ def close(event=None):
     event.widget.quit()
 
 
-def refresh_paths(event=None, path="."):
+def refresh_paths(event=None, path=None):
     """Refreshes path info."""
-    global paths
-    logging.debug("Reading %s...", path)
-    paths = list(pathlib.Path(path).glob("*"))
+    global paths, path_index
+    if not path:
+        path = paths[path_index]
+
+    p = pathlib.Path(path)
+    if not p.is_dir():
+        p = p.parent
+        path_index = -1
+
+    logging.debug("Reading %s...", p)
+    paths = list(p.glob("*"))
     logging.debug("Found %s files.", len(paths))
+
+    if path_index < 0:
+        print("\n".join(str(p) for p in paths))
+        path_index = paths.index(pathlib.Path(path))
+
+    show_image(path)
 
 
 def run_slideshow(event=None):
@@ -92,7 +106,16 @@ def show_image(path):
     msg = ""
     try:
         pil_img = Image.open(path)
-    except PermissionError as ex:
+    except (
+        UnidentifiedImageError,
+        PermissionError,
+        tkinter.TclError,
+        IOError,
+        MemoryError,
+        EOFError,
+        ValueError,
+        BufferError,
+    ) as ex:
         msg = str(ex)
         logging.error(msg)
         pil_img = None
@@ -100,9 +123,9 @@ def show_image(path):
     if pil_img:
         im_w, im_h = pil_img.size
         if SCALE != 1:
-            pil_img = pil_img.RESIZE(
+            pil_img = pil_img.resize(
                 (int(SCALE * im_w), int(SCALE * im_h)),
-                Image.BICUBIC if ANTIALIAS_ON else None,
+                Image.BICUBIC if ANTIALIAS_ON else Image.NEAREST,
             )
 
         if False:
@@ -112,21 +135,24 @@ def show_image(path):
                 ratio = min(w / im_w, h / im_h)
                 im_w = int(im_w * ratio)
                 im_h = int(im_h * ratio)
-                pil_img = pil_img.RESIZE(
+                pil_img = pil_img.resize(
                     (im_w, im_h), Image.BICUBIC if ANTIALIAS_ON else None
                 )
 
     msg = (
         f"{path_index+1}/{len(paths)} "
-        + (f"{im_w}x{im_h} x{SCALE:.1f}" if pil_img else msg)
+        + (f"{im_w}x{im_h} x{SCALE:.2f}" if pil_img else msg)
         + f" {path} - {TITLE}"
     )
     root.title(msg)
     STATUS_LABEL.configure(text=msg)
 
-    img = ImageTk.PhotoImage(pil_img) if pil_img else None
-    IMAGE_LABEL.config(image=img, text="" if img else msg)  # Set it.
-    IMAGE_LABEL.img = img  # Keep it. Why isn't this built in?!
+    if pil_img:
+        img = ImageTk.PhotoImage(pil_img)
+        IMAGE_LABEL.config(image=img, text="" if img else msg)  # Set it.
+        IMAGE_LABEL.img = img  # Keep it. Why isn't this built in?!
+    else:
+        IMAGE_LABEL.config(text=msg, fg="red")
 
 
 def toggle_fullscreen(event=None):
@@ -162,8 +188,8 @@ def zoom(event=None):
         SCALE *= 0.9
     else:
         SCALE = 1
-    SCALE = max(SCALE, 0.1)
-    SCALE = min(SCALE, 8)
+    SCALE = max(SCALE, 0.01)
+    SCALE = min(SCALE, 10.0)
     show_image(paths[path_index])
 
 
@@ -246,7 +272,6 @@ if __name__ == "__main__":
         logging.basicConfig(level=level)
 
     refresh_paths(path=args.path)
-    browse()
 
     if args.slideshow:
         SLIDESHOW_PAUSE = args.slideshow
