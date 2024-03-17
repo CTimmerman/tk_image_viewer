@@ -76,7 +76,7 @@ def refresh_paths(event=None, path=None):
     logging.debug("Found %s files.", len(paths))
 
     if path_index < 0:
-        print("\n".join(str(p) for p in paths))
+        logging.debug("\n".join(str(p) for p in paths))
         path_index = paths.index(pathlib.Path(path))
 
     show_image(path)
@@ -161,9 +161,8 @@ def toggle_fullscreen(event=None):
     root.attributes("-fullscreen", not root.attributes("-fullscreen"))
 
 
-def toggle_slideshow(event=None, **kwargs):
+def toggle_slideshow(event=None):
     """Toggles slideshow."""
-    print("KWARGS", kwargs)
     global SLIDESHOW_ON
     SLIDESHOW_ON = not SLIDESHOW_ON
     if SLIDESHOW_ON:
@@ -265,7 +264,7 @@ if __name__ == "__main__":
         "-v", "--verbose", help="sets log level", action="count", default=0
     )
     args = parser.parse_args()
-    print(args)
+    logging.debug(args)
 
     if args.verbose:
         level = [logging.ERROR, logging.WARN, logging.INFO, logging.DEBUG][args.verbose]
