@@ -1,6 +1,6 @@
 # pylint: disable=unused-argument, global-statement, use-maxsplit-arg, using-constant-test
 """Tk Image Viewer
-by Cees Timmerman 2024-03-17."""
+by Cees Timmerman, 2024-03-17."""
 
 import logging
 import os
@@ -78,7 +78,11 @@ def refresh_paths(event=None, path=None):
 
     if path_index < 0:
         logging.debug("\n".join(str(p) for p in paths))
-        path_index = paths.index(pathlib.Path(path))
+        try:
+            path_index = paths.index(pathlib.Path(path))
+        except ValueError as ex:
+            logging.error(ex)
+            path_index = 0
 
     show_image(path)
 
@@ -198,7 +202,7 @@ root.title(TITLE)
 w, h = root.winfo_screenwidth(), root.winfo_screenheight()
 root.geometry(f"{int(w / 2)}x{int(h / 2)}")
 
-IMAGE_LABEL = tkinter.Label(root, width=w, height=h, fg="red")
+IMAGE_LABEL = tkinter.Label(root, width=w, height=h, fg="red", wraplength=int(w/2))
 IMAGE_LABEL.pack()
 
 STATUS_LABEL = tkinter.Label(
