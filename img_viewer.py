@@ -1,4 +1,4 @@
-# pylint: disable=unused-argument, global-statement, use-maxsplit-arg, using-constant-test
+# pylint: disable=unused-argument, global-statement, too-many-branches, use-maxsplit-arg
 """Tk Image Viewer
 by Cees Timmerman, 2024-03-17."""
 
