@@ -18,10 +18,12 @@ from pillow_heif import register_heif_opener
 
 register_heif_opener()
 
-ANTIALIAS_LEVEL = Image.Resampling.NEAREST  # 0
+QUALITY = Image.Resampling.NEAREST  # 0
 BG_COLORS = ["black", "gray10", "gray50", "white"]
 BG_INDEX = -1
 FIT_WINDOW = 0
+FULLSCREEN = 1
+REFRESH_INTERVAL = 0
 SCALE = 1.0
 SHOW_INFO = False
 TITLE = __doc__.split("\n")[0]
@@ -67,9 +69,12 @@ def browse(event=None):
 
 @log_this
 def close(event=None):
-    """Closes app."""
-    event.widget.withdraw()
-    event.widget.quit()
+    """Closes fullscreen or app."""
+    if root.overrideredirect():
+        fullscreen_toggle()
+    else:
+        event.widget.withdraw()
+        event.widget.quit()
 
 
 @log_this
@@ -113,7 +118,7 @@ def image_load(path=None):
         logging.error(err_msg)
         root.pil_im = None
         msg = f"{msg} {err_msg} {path}"
-        IMAGE_WIDGET.config(image="", text=msg, fg="red")
+        IMAGE_WIDGET.config(image="", text=msg)
         IMAGE_WIDGET.img = None
         root.title(msg + " - " + TITLE)
 
@@ -136,14 +141,14 @@ def image_resize():
             ratio = min(w / im_w, h / im_h)
             im_w = int(im_w * ratio)
             im_h = int(im_h * ratio)
-            pil_im = pil_im.resize((im_w, im_h), ANTIALIAS_LEVEL)
+            pil_im = pil_im.resize((im_w, im_h), QUALITY)
 
     if SCALE != 1:
         logging.debug("Scaling to %s", SCALE)
         try:
             pil_im = pil_im.resize(
                 (int(SCALE * im_w), int(SCALE * im_h)),
-                ANTIALIAS_LEVEL,
+                QUALITY,
             )
         except ValueError as ex:
             logging.error("Failed to scale. %s", ex)
@@ -154,7 +159,7 @@ def image_resize():
 
     try:
         img = ImageTk.PhotoImage(pil_im)
-        IMAGE_WIDGET.config(image=img, text="YAY")  # Set it.
+        IMAGE_WIDGET.config(image=img, text="")  # Set it.
         IMAGE_WIDGET.img = img  # Keep it. Why isn't this built in?!
 
         msg = f"{path_index+1}/{len(paths)} {im_w}x{im_h} x{SCALE:.2f} {paths[path_index]}"
@@ -227,12 +232,20 @@ def paths_refresh(event=None, path=None):
     image_load()
 
 
+def refresh_loop():
+    """Autorefreshes paths."""
+    if REFRESH_INTERVAL:
+        paths_refresh()
+        root.after(REFRESH_INTERVAL, refresh_loop)
+
+
 def resize(w, h):
     """Resize the Tk image widget."""
     INFO_OVERLAY.config(width=w, wraplength=w)
     IMAGE_WIDGET.config(width=w, height=h)
 
 
+@log_this
 def resize_handler(event):
     """Handles Tk resize event."""
     resize(event.width, event.height)
@@ -320,7 +333,26 @@ def transpose_dec(event=None):
 @log_this
 def fullscreen_toggle(event=None):
     """Toggles fullscreen."""
-    root.attributes("-fullscreen", not root.attributes("-fullscreen"))
+    if not root.overrideredirect():
+        root.old_geometry = root.geometry()
+        root.old_state = root.state()
+        logging.debug("Old widow geometry: %s", root.old_geometry)
+        root.overrideredirect(True)
+        root.state("zoomed")
+    else:
+        root.overrideredirect(False)
+        root.state(root.old_state)
+        if root.state() == "normal":
+            new_geometry = (
+                # Happens when window wasn't visible yet.
+                "300x200+300+200"
+                if root.old_geometry.startswith("1x1")
+                else root.old_geometry
+            )
+            logging.debug("Restoring geometry: %s", new_geometry)
+            root.geometry(new_geometry)
+    # Keeps using display 1
+    # root.attributes("-fullscreen", not root.attributes("-fullscreen"))
 
 
 @log_this
@@ -346,7 +378,8 @@ def zoom(event=None):
 root = tkinter.Tk()
 root.title(TITLE)
 screen_w, screen_h = root.winfo_screenwidth(), root.winfo_screenheight()
-root.geometry(f"{int(screen_w / 2)}x{int(screen_h / 2)}")
+geometry = f"{int(screen_w / 2)}x{int(screen_h / 2)}+100+100"
+root.geometry(geometry)
 SLIDESHOW_ON = False
 SLIDESHOW_PAUSE = 4000
 STATUS_OVERLAY = tkinter.Label(
@@ -372,17 +405,24 @@ INFO_OVERLAY = tkinter.Label(
 )
 INFO_OVERLAY.place(x=0, y=0)
 IMAGE_WIDGET = tkinter.Label(
-    root, width=screen_w, height=screen_h, fg="red", wraplength=int(screen_w / 2)
+    root,
+    compound="center",
+    fg="red",
+    width=screen_w,
+    height=screen_h,
+    wraplength=int(screen_w / 2),
 )
 IMAGE_WIDGET.place(x=0, y=0, relwidth=1, relheight=1)
 
 set_bg()
 
 root.bind_all("<Key>", debug_keys)
+
 root.bind("<Escape>", close)
 
-root.bind("<Return>", fullscreen_toggle)
+root.bind("<f>", fullscreen_toggle)
 root.bind("<F11>", fullscreen_toggle)
+root.bind("<Return>", fullscreen_toggle)
 
 root.bind("<Left>", browse)
 root.bind("<Right>", browse)
@@ -419,14 +459,20 @@ root.bind("<Delete>", delete_file)
 
 def main(args):
     """Main function."""
-    global ANTIALIAS_LEVEL, SLIDESHOW_PAUSE, TRANSPOSE_INDEX, VERBOSITY
+    global FULLSCREEN, QUALITY, REFRESH_INTERVAL, SLIDESHOW_PAUSE, TRANSPOSE_INDEX, VERBOSITY
+
     if args.verbose:
         VERBOSITY = VERBOSITY_LEVELS[1 + args.verbose]
         set_verbosity()
 
     logging.debug("Args: %s", args)
 
-    ANTIALIAS_LEVEL = [
+    FULLSCREEN = args.fullscreen
+    if FULLSCREEN:
+        # Needs visible window so wait for mainloop.
+        root.after(500, fullscreen_toggle)
+
+    QUALITY = [
         Image.Resampling.NEAREST,
         Image.Resampling.BOX,
         Image.Resampling.BILINEAR,
@@ -438,6 +484,9 @@ def main(args):
     TRANSPOSE_INDEX = args.transpose
 
     paths_refresh(path=args.path)
+    if args.refresh:
+        REFRESH_INTERVAL = args.refresh
+        root.after(REFRESH_INTERVAL, refresh_loop)
 
     if args.slideshow:
         SLIDESHOW_PAUSE = args.slideshow
@@ -456,35 +505,55 @@ if __name__ == "__main__":
     parser.add_argument("path", default=os.getcwd(), nargs="?")
     parser.add_argument(
         "-f",
-        "--fit",
-        help="fit window (0-1, default 0)",
-        default=0,
+        "--fullscreen",
+        metavar="N",
         nargs="?",
+        help="run in fullscreen on display N (1-?, default 1)",
+        const=1,
+        type=int,
+    )
+    parser.add_argument(
+        "-p",
+        "--pinch",
+        metavar="N",
+        nargs="?",
+        help="pinch to fit window (0-1, default 0)",
+        default=0,
         type=int,
     )
     parser.add_argument(
         "-q",
         "--quality",
+        metavar="N",
         help="set antialiasing level (0-5, default 0)",
         default=0,
         type=int,
     )
     parser.add_argument(
+        "-r",
+        "--refresh",
+        metavar="ms",
+        nargs="?",
+        help="refresh interval (default 4000)",
+        const=4000,
+        type=int,
+    )
+    parser.add_argument(
         "-s",
         "--slideshow",
-        metavar="N",
+        metavar="ms",
+        nargs="?",
         help="switch to next image every N ms (default 4000)",
         const=4000,
         type=int,
-        nargs="?",
     )
     parser.add_argument(
         "-t",
         "--transpose",
-        metavar="T",
+        metavar="N",
         help=f"transpose 0-{len(Transpose)-1} {', '.join(x.name for x in Transpose)}",
-        type=int,
         default=-1,
+        type=int,
     )
     parser.add_argument(
         "-v", "--verbose", help="set log level", action="count", default=0
