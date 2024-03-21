@@ -15,7 +15,7 @@ from PIL import (
     ImageTk,
 )
 from PIL.Image import Transpose
-from pillow_heif import register_heif_opener
+from pillow_heif import register_heif_opener  # type: ignore
 
 
 # Add a handler to stream to sys.stderr warnings from all modules.
@@ -33,7 +33,7 @@ FIT_ALL = 1
 FIT_BIG = 2
 FIT_SMALL = 4
 
-PIL_IMAGE = None
+PIL_IMAGE = None  # type: ignore
 QUALITY = Image.Resampling.NEAREST  # 0
 REFRESH_INTERVAL = 0
 SCALE = 1.0
@@ -142,7 +142,6 @@ def image_load(path=None):
 
 def image_resize():
     """Resizes image."""
-    global PIL_IMAGE
     if not PIL_IMAGE:
         return
 
