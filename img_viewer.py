@@ -1,7 +1,8 @@
-# pylint: disable=unused-argument, global-statement, too-many-branches, use-maxsplit-arg
+# pylint: disable=consider-using-f-string, global-statement, line-too-long, too-many-boolean-expressions, too-many-branches, unused-argument, use-maxsplit-arg
 """Tk Image Viewer
 by Cees Timmerman, 2024-03-17."""
 
+import functools
 import logging
 import os
 import pathlib
@@ -16,13 +17,24 @@ from PIL import (
 from PIL.Image import Transpose
 from pillow_heif import register_heif_opener
 
+
+# Add a handler to stream to sys.stderr warnings from all modules.
+logging.basicConfig(format="%(levelname)s: %(message)s")
+# Add a logging namespace.
+log = logging.getLogger(__name__)
+
 register_heif_opener()
 
-QUALITY = Image.Resampling.NEAREST  # 0
 BG_COLORS = ["black", "gray10", "gray50", "white"]
 BG_INDEX = -1
-FIT_WINDOW = 0
-FULLSCREEN = 1
+
+FIT_TYPE = 0
+FIT_ALL = 1
+FIT_BIG = 2
+FIT_SMALL = 4
+
+PIL_IMAGE = None
+QUALITY = Image.Resampling.NEAREST  # 0
 REFRESH_INTERVAL = 0
 SCALE = 1.0
 SHOW_INFO = False
@@ -36,6 +48,7 @@ VERBOSITY_LEVELS = [
     logging.DEBUG,
 ]
 VERBOSITY = logging.WARNING
+WINDOW_SIZE = ""
 paths: list[str] = []
 path_index: int = 0
 
@@ -43,9 +56,10 @@ path_index: int = 0
 def log_this(func):
     """Decorator to log function calls."""
 
+    @functools.wraps(func)
     def inner(*args, **kwargs):
-        logging.debug("Calling %s with %s, %s", func.__name__, args, kwargs)
-        func(*args, **kwargs)
+        log.debug("Calling %s with %s, %s", func.__name__, args, kwargs)
+        return func(*args, **kwargs)
 
     return inner
 
@@ -77,7 +91,6 @@ def close(event=None):
         event.widget.quit()
 
 
-@log_this
 def debug_keys(event=None):
     """Shows all keys."""
 
@@ -86,24 +99,27 @@ def delete_file(event=None):
     """Delete file."""
     path = paths[path_index]
     msg = f"Delete? {path}"
-    logging.warning(msg)
+    log.warning(msg)
     answer = messagebox.askyesno("Delete file?", f"Delete {path}?")
     if answer is True:
-        logging.warning("Deleting %s", path)
-        paths_refresh()
+        log.warning("Deleting %s", path)
+        paths_update()
 
 
 def image_load(path=None):
     """Loads image."""
+    global PIL_IMAGE
+
     if not path:
         path = paths[path_index]
 
     msg = f"{path_index+1}/{len(paths)} "
-    logging.debug("Loading %s%s", msg, path)
+    log.debug("Loading %s%s", msg, path)
 
     err_msg = ""
     try:
-        root.pil_im = Image.open(path)
+        PIL_IMAGE = Image.open(path)
+        log.debug("Cached %s PIL_IMAGE", PIL_IMAGE.size)
         image_resize()
     except (
         tkinter.TclError,
@@ -115,58 +131,65 @@ def image_load(path=None):
         OSError,
     ) as ex:
         err_msg = str(ex)
-        logging.error(err_msg)
-        root.pil_im = None
+        log.error(err_msg)
+        PIL_IMAGE = None
         msg = f"{msg} {err_msg} {path}"
         IMAGE_WIDGET.config(image="", text=msg)
-        IMAGE_WIDGET.img = None
+        IMAGE_WIDGET.im = None
+        INFO_OVERLAY.config(text=msg)
         root.title(msg + " - " + TITLE)
 
 
 def image_resize():
     """Resizes image."""
-    pil_im = root.pil_im
-    if not pil_im:
+    global PIL_IMAGE
+    if not PIL_IMAGE:
         return
 
-    im_w, im_h = pil_im.size
+    pim = PIL_IMAGE.copy()
 
-    if FIT_WINDOW:
+    log.debug("Got cached %s", PIL_IMAGE.size)
+    im_w, im_h = PIL_IMAGE.size
+
+    if FIT_TYPE:
         w = root.winfo_width()
         h = root.winfo_height()
 
-        logging.debug("Fitting to window %s %sx%s", IMAGE_WIDGET.winfo_geometry(), w, h)
-        im_w, im_h = pil_im.size
-        if im_w > w or im_h > h:
-            ratio = min(w / im_w, h / im_h)
-            im_w = int(im_w * ratio)
-            im_h = int(im_h * ratio)
-            pil_im = pil_im.resize((im_w, im_h), QUALITY)
+        log.debug("Fitting to window %s %sx%s", IMAGE_WIDGET.winfo_geometry(), w, h)
+        im_w, im_h = PIL_IMAGE.size
+        if im_w != w or im_h != h:
+            if (
+                FIT_TYPE & FIT_ALL
+                or (FIT_TYPE & FIT_BIG and (im_w > w or im_h > h))
+                or (FIT_TYPE & FIT_SMALL and (im_w < w or im_h < h))
+            ):
+                ratio = min(w / im_w, h / im_h)
+                log.debug("Ratio: %s", ratio)
+                pim = PIL_IMAGE.resize((int(im_w * ratio), int(im_h * ratio)), QUALITY)
 
     if SCALE != 1:
-        logging.debug("Scaling to %s", SCALE)
+        log.debug("Scaling to %s", SCALE)
         try:
-            pil_im = pil_im.resize(
+            pim = PIL_IMAGE.resize(
                 (int(SCALE * im_w), int(SCALE * im_h)),
                 QUALITY,
             )
         except ValueError as ex:
-            logging.error("Failed to scale. %s", ex)
+            log.error("Failed to scale. %s", ex)
 
     if TRANSPOSE_INDEX != -1:
-        logging.debug("Transposing %s", Transpose(TRANSPOSE_INDEX))
-        pil_im = pil_im.transpose(TRANSPOSE_INDEX)
+        log.debug("Transposing %s", Transpose(TRANSPOSE_INDEX))
+        pim = pim.transpose(TRANSPOSE_INDEX)
 
     try:
-        img = ImageTk.PhotoImage(pil_im)
-        IMAGE_WIDGET.config(image=img, text="")  # Set it.
-        IMAGE_WIDGET.img = img  # Keep it. Why isn't this built in?!
-
-        msg = f"{path_index+1}/{len(paths)} {im_w}x{im_h} x{SCALE:.2f} {paths[path_index]}"
+        im = ImageTk.PhotoImage(pim)
+        IMAGE_WIDGET.config(image=im, text="")  # Set it.
+        IMAGE_WIDGET.im = im  # Keep it. Why isn't this built in?!
+        msg = f"{path_index+1}/{len(paths)} {im_w}x{im_h} @ {'%sx%s' % pim.size} {paths[path_index]}"
         root.title(msg + " - " + TITLE)
 
         if SHOW_INFO:
-            exif = pil_im.getexif()
+            exif = PIL_IMAGE.getexif()
             if exif:
                 msg += " EXIF:\n"
                 for key, val in exif.items():
@@ -181,10 +204,10 @@ def image_resize():
                     except KeyError:
                         pass
 
-            INFO_OVERLAY.configure(text=msg, fg="green")
+        INFO_OVERLAY.configure(text=msg)
 
     except MemoryError as ex:
-        logging.error("Out of memory. Scaling down. %s", ex)
+        log.error("Out of memory. Scaling down. %s", ex)
         root.event_generate("<minus>")
 
 
@@ -197,8 +220,6 @@ def info_toggle(event=None):
     else:
         INFO_OVERLAY.lower()
 
-    image_resize()
-
 
 @log_this
 def mouse_wheel(event=None):
@@ -210,7 +231,7 @@ def mouse_wheel(event=None):
 
 
 @log_this
-def paths_refresh(event=None, path=None):
+def paths_update(event=None, path=None):
     """Refreshes path info."""
     global paths, path_index
     if not path:
@@ -220,35 +241,39 @@ def paths_refresh(event=None, path=None):
     if not p.is_dir():
         p = p.parent
 
-    logging.debug("Reading %s...", p)
+    log.debug("Reading %s...", p)
     paths = list(p.glob("*"))
-    logging.debug("Found %s files.", len(paths))
+    log.debug("Found %s files.", len(paths))
 
     try:
         path_index = paths.index(pathlib.Path(path))
     except ValueError as ex:
-        logging.error("paths_refresh %s", ex)
+        log.error("paths_update %s", ex)
 
     image_load()
 
 
-def refresh_loop():
-    """Autorefreshes paths."""
+def update_loop():
+    """Autoupdates paths."""
     if REFRESH_INTERVAL:
-        paths_refresh()
-        root.after(REFRESH_INTERVAL, refresh_loop)
-
-
-def resize(w, h):
-    """Resize the Tk image widget."""
-    INFO_OVERLAY.config(width=w, wraplength=w)
-    IMAGE_WIDGET.config(width=w, height=h)
+        paths_update()
+        root.after(REFRESH_INTERVAL, update_loop)
 
 
 @log_this
 def resize_handler(event):
     """Handles Tk resize event."""
-    resize(event.width, event.height)
+    global WINDOW_SIZE
+    new_size = root.winfo_geometry().split("+", maxsplit=1)[0]
+    if WINDOW_SIZE != new_size:
+        log.debug("%s", f"{WINDOW_SIZE} -> {new_size}")
+        log.debug(INFO_OVERLAY.winfo_geometry())
+        IMAGE_WIDGET.config(wraplength=event.width)
+        INFO_OVERLAY.config(wraplength=event.width)
+        STATUS_OVERLAY.config(wraplength=event.width)
+        if WINDOW_SIZE and FIT_TYPE:
+            image_resize()
+        WINDOW_SIZE = new_size
 
 
 @log_this
@@ -271,14 +296,8 @@ def set_verbosity(event=None):
     if VERBOSITY < 10:
         VERBOSITY = logging.CRITICAL
 
-    logging.basicConfig(level=VERBOSITY)
-    logging.getLogger().setLevel(VERBOSITY)
-    s = "verbosity set"
-    logging.debug(s)
-    logging.info(s)
-    logging.warning(s)
-    logging.error(s)
-    logging.critical("%s\n", s)
+    log.setLevel(VERBOSITY)
+    print("Log level %s" % logging.getLevelName(VERBOSITY))
 
 
 def slideshow_run(event=None):
@@ -293,13 +312,13 @@ def slideshow_toggle(event=None):
     global SLIDESHOW_ON
     SLIDESHOW_ON = not SLIDESHOW_ON
     if SLIDESHOW_ON:
-        logging.info("Starting slideshow.")
+        toast("Starting slideshow.")
         root.after(SLIDESHOW_PAUSE, slideshow_run)
     else:
-        logging.info("Stopping slideshow.")
+        toast("Stopping slideshow.")
 
 
-def status_timeout(msg: str, ms: int = 1000):
+def toast(msg: str, ms: int = 1000):
     """Temporarily shows a status message."""
     STATUS_OVERLAY.config(text=msg)
     STATUS_OVERLAY.lift()
@@ -314,7 +333,7 @@ def transpose_inc(event=None):
     if TRANSPOSE_INDEX >= len(Transpose):
         TRANSPOSE_INDEX = -1
     if TRANSPOSE_INDEX >= 0:
-        status_timeout(f"Transpose: {Transpose(TRANSPOSE_INDEX).name}")
+        toast(f"Transpose: {Transpose(TRANSPOSE_INDEX).name}")
     image_resize()
 
 
@@ -326,7 +345,7 @@ def transpose_dec(event=None):
     if TRANSPOSE_INDEX < -1:
         TRANSPOSE_INDEX = len(Transpose) - 1
     if TRANSPOSE_INDEX >= 0:
-        status_timeout(f"Transpose: {Transpose(TRANSPOSE_INDEX).name}")
+        toast(f"Transpose: {Transpose(TRANSPOSE_INDEX).name}")
     image_resize()
 
 
@@ -336,7 +355,7 @@ def fullscreen_toggle(event=None):
     if not root.overrideredirect():
         root.old_geometry = root.geometry()
         root.old_state = root.state()
-        logging.debug("Old widow geometry: %s", root.old_geometry)
+        log.debug("Old widow geometry: %s", root.old_geometry)
         root.overrideredirect(True)
         root.state("zoomed")
     else:
@@ -349,7 +368,7 @@ def fullscreen_toggle(event=None):
                 if root.old_geometry.startswith("1x1")
                 else root.old_geometry
             )
-            logging.debug("Restoring geometry: %s", new_geometry)
+            log.debug("Restoring geometry: %s", new_geometry)
             root.geometry(new_geometry)
     # Keeps using display 1
     # root.attributes("-fullscreen", not root.attributes("-fullscreen"))
@@ -397,7 +416,7 @@ INFO_OVERLAY = tkinter.Label(
     root,
     text="status",
     font=("Consolas", 14),
-    fg="green",
+    fg="yellow",
     bg="black",
     wraplength=screen_w,
     anchor="nw",
@@ -418,60 +437,50 @@ set_bg()
 
 root.bind_all("<Key>", debug_keys)
 
-root.bind("<Escape>", close)
-
-root.bind("<f>", fullscreen_toggle)
-root.bind("<F11>", fullscreen_toggle)
-root.bind("<Return>", fullscreen_toggle)
-
-root.bind("<Left>", browse)
-root.bind("<Right>", browse)
-root.bind("<Up>", browse)
-root.bind("<Down>", browse)
-root.bind("<MouseWheel>", mouse_wheel)
-root.bind("<Button-4>", mouse_wheel)
-root.bind("<Button-5>", mouse_wheel)
-
-root.bind("<r>", paths_refresh)
-root.bind("<F5>", paths_refresh)
-
-root.bind("<c>", set_bg)
-
-root.bind("<Control-MouseWheel>", zoom)
-root.bind("<minus>", zoom)
-root.bind("<plus>", zoom)
-root.bind("<equal>", zoom)
-
-root.bind("<s>", slideshow_toggle)
-root.bind("<Pause>", slideshow_toggle)
-
-root.bind("<t>", transpose_inc)
-root.bind("<T>", transpose_dec)
-
-root.bind("<v>", set_verbosity)
-
-root.bind("<i>", info_toggle)
-
-root.bind("<Configure>", resize_handler)
-
-root.bind("<Delete>", delete_file)
+binds = [
+    ("<Escape>", close),
+    ("<f>", fullscreen_toggle),
+    ("<F11>", fullscreen_toggle),
+    ("<Return>", fullscreen_toggle),
+    ("<Left>", browse),
+    ("<Right>", browse),
+    ("<Up>", browse),
+    ("<Down>", browse),
+    ("<MouseWheel>", mouse_wheel),
+    ("<Button-4>", mouse_wheel),
+    ("<Button-5>", mouse_wheel),
+    ("<u>", paths_update),
+    ("<F5>", paths_update),
+    ("<c>", set_bg),
+    ("<Control-MouseWheel>", zoom),
+    ("<minus>", zoom),
+    ("<plus>", zoom),
+    ("<equal>", zoom),
+    ("<s>", slideshow_toggle),
+    ("<Pause>", slideshow_toggle),
+    ("<t>", transpose_inc),
+    ("<T>", transpose_dec),
+    ("<v>", set_verbosity),
+    ("<i>", info_toggle),
+    ("<Configure>", resize_handler),
+    ("<Delete>", delete_file),
+]
+for b in binds:
+    root.bind(b[0], b[1])
 
 
 def main(args):
     """Main function."""
-    global FULLSCREEN, QUALITY, REFRESH_INTERVAL, SLIDESHOW_PAUSE, TRANSPOSE_INDEX, VERBOSITY
+    global FIT_TYPE, QUALITY, REFRESH_INTERVAL, SLIDESHOW_PAUSE, TRANSPOSE_INDEX, VERBOSITY
 
     if args.verbose:
         VERBOSITY = VERBOSITY_LEVELS[1 + args.verbose]
         set_verbosity()
 
-    logging.debug("Args: %s", args)
+    log.debug("Args: %s", args)
+    log.debug("Binds %s", "\n".join(f"{k}: {f.__name__}" for k, f in binds))
 
-    FULLSCREEN = args.fullscreen
-    if FULLSCREEN:
-        # Needs visible window so wait for mainloop.
-        root.after(500, fullscreen_toggle)
-
+    FIT_TYPE = args.resize
     QUALITY = [
         Image.Resampling.NEAREST,
         Image.Resampling.BOX,
@@ -480,13 +489,17 @@ def main(args):
         Image.Resampling.BICUBIC,
         Image.Resampling.LANCZOS,
     ][args.quality]
-
     TRANSPOSE_INDEX = args.transpose
 
-    paths_refresh(path=args.path)
-    if args.refresh:
-        REFRESH_INTERVAL = args.refresh
-        root.after(REFRESH_INTERVAL, refresh_loop)
+    # Needs visible window so wait for mainloop.
+    root.after(100, paths_update, None, args.path)
+
+    if args.fullscreen:
+        root.after(500, fullscreen_toggle)
+
+    if args.update:
+        REFRESH_INTERVAL = args.update
+        root.after(REFRESH_INTERVAL, update_loop)
 
     if args.slideshow:
         SLIDESHOW_PAUSE = args.slideshow
@@ -504,8 +517,8 @@ if __name__ == "__main__":
     )
     parser.add_argument("path", default=os.getcwd(), nargs="?")
     parser.add_argument(
-        "-f",
         "--fullscreen",
+        "-f",
         metavar="N",
         nargs="?",
         help="run in fullscreen on display N (1-?, default 1)",
@@ -513,34 +526,34 @@ if __name__ == "__main__":
         type=int,
     )
     parser.add_argument(
-        "-p",
-        "--pinch",
+        "--resize",
+        "-r",
         metavar="N",
         nargs="?",
-        help="pinch to fit window (0-1, default 0)",
-        default=0,
+        help="resize image to fit window (0-3: none, all, big, small. default 0)",
+        const=1,
         type=int,
     )
     parser.add_argument(
-        "-q",
         "--quality",
+        "-q",
         metavar="N",
         help="set antialiasing level (0-5, default 0)",
         default=0,
         type=int,
     )
     parser.add_argument(
-        "-r",
-        "--refresh",
+        "--update",
+        "-u",
         metavar="ms",
         nargs="?",
-        help="refresh interval (default 4000)",
+        help="update interval (default 4000)",
         const=4000,
         type=int,
     )
     parser.add_argument(
-        "-s",
         "--slideshow",
+        "-s",
         metavar="ms",
         nargs="?",
         help="switch to next image every N ms (default 4000)",
@@ -548,14 +561,15 @@ if __name__ == "__main__":
         type=int,
     )
     parser.add_argument(
-        "-t",
         "--transpose",
+        "-t",
         metavar="N",
-        help=f"transpose 0-{len(Transpose)-1} {', '.join(x.name for x in Transpose)}",
+        help=f"transpose 0-{len(Transpose)-1} {', '.join(x.name.lower() for x in Transpose)}",
         default=-1,
         type=int,
     )
     parser.add_argument(
         "-v", "--verbose", help="set log level", action="count", default=0
     )
+
     main(parser.parse_args())
