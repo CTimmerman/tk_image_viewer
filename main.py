@@ -1,6 +1,9 @@
 # pylint: disable=consider-using-f-string, global-statement, line-too-long, too-many-boolean-expressions, too-many-branches, unused-argument, use-maxsplit-arg
 """Tk Image Viewer
-by Cees Timmerman, 2024-03-17 to 2024-03-23."""
+by Cees Timmerman
+2024-03-17 First version.
+2024-03-23 Save stuff.
+"""
 
 import enum
 import functools
@@ -12,7 +15,7 @@ import time
 import tkinter
 from tkinter import filedialog, messagebox
 
-from PIL import ExifTags, Image, ImageTk, IptcImagePlugin
+from PIL import ExifTags, Image, ImageTk, IptcImagePlugin, TiffTags
 from PIL.Image import Transpose
 from pillow_heif import register_heif_opener  # type: ignore
 
@@ -102,6 +105,7 @@ def close(event=None):
         event.widget.withdraw()
         event.widget.quit()
 
+
 @log_this
 def debug_keys(event=None):
     """Shows all keys."""
@@ -135,7 +139,7 @@ def help_handler(event=None):
 
 def image_load(path=None):
     """Loads image."""
-    global IMAGE
+    global IMAGE, INFO
 
     if not path:
         path = paths[path_index]
@@ -148,7 +152,7 @@ def image_load(path=None):
         stats = os.stat(path)
         log.debug("Stat: %s", stats)
         INFO = {
-            "Size": stats.st_size,
+            "Size": f"{stats.st_size:,} B",
             "Accessed": time.strftime(
                 "%Y-%m-%d %H:%M:%S", time.localtime(stats.st_atime)
             ),
@@ -266,7 +270,7 @@ def im_show(im):
 
     msg = f"{path_index+1}/{len(paths)} {'%sx%s' % IMAGE.size} @ {'%sx%s' % im.size} {paths[path_index]}"
     root.title(msg + " - " + TITLE)
-    INFO_OVERLAY.configure(text=msg + info_get())
+    INFO_OVERLAY.configure(text=msg + "\n" + info_get())
 
 
 def info_get() -> str:
@@ -276,13 +280,12 @@ def info_get() -> str:
         return msg
 
     # Image File Directories (IFD)
-    from PIL.TiffTags import TAGS
-
     if hasattr(IMAGE, "tag_v2"):
-        meta_dict = {TAGS[key]: IMAGE.tag[key] for key in IMAGE.tag_v2}
+        meta_dict = {TiffTags.TAGS_V2[key]: IMAGE.tag_v2[key] for key in IMAGE.tag_v2}
         print(meta_dict)
 
     # Exchangeable Image File (EXIF)
+    # Workaround from https://github.com/python-pillow/Pillow/issues/5863
     if hasattr(IMAGE, "_getexif"):
         exif = IMAGE._getexif()  # pylint: disable=protected-access
         if exif:
@@ -316,6 +319,7 @@ def info_toggle(event=None):
     SHOW_INFO = not SHOW_INFO
     if SHOW_INFO:
         INFO_OVERLAY.lift()
+        log.debug("Showing info:\n%s", INFO_OVERLAY["text"])
     else:
         INFO_OVERLAY.lower()
 
@@ -329,39 +333,51 @@ def mouse_handler(event=None):
         root.event_generate("<Up>")
 
 
-@log_this
-def path_open(event=None):
-    """Open a file using the filepicker."""
+SUPPORTED_FILES: list = []
+
+
+def set_supported_files():
+    """Sets supported files. TODO: Distinguish between openable and saveable."""
+    global SUPPORTED_FILES
     exts = Image.registered_extensions()
     type_exts = {}
     for k, v in exts.items():
         type_exts.setdefault(v, []).append(k)
 
-    ftypes = [
+    SUPPORTED_FILES = [
         ("All supported files", " ".join(sorted(list(exts)))),
         ("All files", "*"),
         *sorted(type_exts.items()),
     ]
-    filename = filedialog.askopenfilename(filetypes=ftypes)
-    paths_update(None, filename)
+
+
+set_supported_files()
+
+
+@log_this
+def path_open(event=None):
+    """Open a file using the filepicker."""
+    filename = filedialog.askopenfilename(filetypes=SUPPORTED_FILES)
+    if filename:
+        paths_update(None, filename)
 
 
 @log_this
 def path_save(event=None):
     """Save a file using the filepicker."""
-    exts = Image.registered_extensions()
-    log.debug("exts: %s", exts)
-    supported_extensions = [ex[1] for ex, f in exts.items() if f in Image.OPEN]
-    log.debug("openable exts: %s", supported_extensions)
-    filename = filedialog.asksaveasfilename(filetypes=exts)
-    log.info("Saving %s", filename)
-    try:
-        IMAGE.save(filename)
-        toast(f"Saved {filename}")
-    except IOError as ex:
-        msg = f"Failed to save as {filename}. {ex}"
-        log.error(msg)
-        toast(msg)
+    path = paths[path_index]
+    p = pathlib.Path(path)
+    filename = filedialog.asksaveasfilename(initialfile=p.absolute(), defaultextension=p.suffix, filetypes=SUPPORTED_FILES)
+    if filename:
+        log.info("Saving %s", filename)
+        try:
+            IMAGE.save(filename)
+            paths_update()
+            toast(f"Saved {filename}")
+        except (IOError, ValueError) as ex:
+            msg = f"Failed to save as {filename}. {ex}"
+            log.error(msg)
+            toast(msg)
 
 
 @log_this
@@ -585,11 +601,12 @@ binds = [
     (browse, "Left Right Up Down Key-1 x"),
     (mouse_handler, "MouseWheel Button-4 Button-5"),
     (path_open, "o"),
+    (path_save, "s"),
     (paths_update, "F5 u"),
     (set_bg, "b c"),
     (zoom, "Control-MouseWheel minus plus equal"),
     (fit_handler, "r"),
-    (slideshow_toggle, "s Pause"),
+    (slideshow_toggle, "Pause"),
     (transpose_inc, "t"),
     (transpose_dec, "T"),
     (set_verbosity, "v"),
