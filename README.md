@@ -31,14 +31,16 @@ F11 Return f - Toggles fullscreen.
 Left Right Up Down Key-1 x - Go to next or previous file.
 MouseWheel Button-4 Button-5 - Handles mouse events.
 o - Open a file using the filepicker.
+s - Save a file using the filepicker.
 F5 u - Refreshes path info.
 b c - Sets background color.
 Control-MouseWheel minus plus equal - Zooms.
 r - Changes type of window fitting.
-s Pause - Toggles slideshow.
+Pause - Toggles slideshow.
 t - Increment transpose.
 T - Decrement transpose.
 v - Sets verbosity.
 i - Toggles info overlay.
+Configure - Handles Tk resize event.
 Delete - Delete file.
 ```
