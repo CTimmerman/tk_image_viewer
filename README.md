@@ -25,32 +25,20 @@ options:
 Binds:
 
 ```pre
-<Escape>: close
-<q>: close
-<F1>: help_handler
-<h>: help_handler
-<f>: fullscreen_toggle
-<F11>: fullscreen_toggle
-<Return>: fullscreen_toggle
-<Left>: browse
-<Right>: browse
-<Up>: browse
-<Down>: browse
-<MouseWheel>: mouse_wheel
-<Button-4>: mouse_wheel
-<Button-5>: mouse_wheel
-<u>: paths_update
-<F5>: paths_update
-<c>: set_bg
-<Control-MouseWheel>: zoom
-<minus>: zoom
-<plus>: zoom
-<equal>: zoom
-<s>: slideshow_toggle
-<Pause>: slideshow_toggle
-<t>: transpose_inc
-<T>: transpose_dec
-<v>: set_verbosity
-<i>: info_toggle
-<Delete>: delete_file
+Escape q - Closes fullscreen or app.
+F1 h - Show help.
+F11 Return f - Toggles fullscreen.
+Left Right Up Down Key-1 x - Go to next or previous file.
+MouseWheel Button-4 Button-5 - Handles mouse events.
+o - Open a file using the filepicker.
+F5 u - Refreshes path info.
+b c - Sets background color.
+Control-MouseWheel minus plus equal - Zooms.
+r - Changes type of window fitting.
+s Pause - Toggles slideshow.
+t - Increment transpose.
+T - Decrement transpose.
+v - Sets verbosity.
+i - Toggles info overlay.
+Delete - Delete file.
 ```
