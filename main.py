@@ -9,21 +9,10 @@ import pathlib
 import tkinter
 from tkinter import messagebox
 
-from PIL import (
-    ExifTags,
-    Image,
-    ImageTk,
-)
+from PIL import ExifTags, Image, ImageTk, IptcImagePlugin
 from PIL.Image import Transpose
 from pillow_heif import register_heif_opener  # type: ignore
 
-
-# Add a handler to stream to sys.stderr warnings from all modules.
-logging.basicConfig(format="%(levelname)s: %(message)s")
-# Add a logging namespace.
-log = logging.getLogger(__name__)
-
-register_heif_opener()
 
 BG_COLORS = ["black", "gray10", "gray50", "white"]
 BG_INDEX = -1
@@ -37,6 +26,8 @@ PIL_IMAGE = None  # type: ignore
 QUALITY = Image.Resampling.NEAREST  # 0
 REFRESH_INTERVAL = 0
 SCALE = 1.0
+SCALE_MIN = 0.001
+SCALE_MAX = 40.0
 SHOW_INFO = False
 TITLE = __doc__.split("\n")[0]
 TRANSPOSE_INDEX = -1
@@ -52,11 +43,18 @@ WINDOW_SIZE = ""
 paths: list[str] = []
 path_index: int = 0
 
+# Add a handler to stream to sys.stderr warnings from all modules.
+logging.basicConfig(format="%(levelname)s: %(message)s")
+# Add a logging namespace.
+log = logging.getLogger(TITLE)
+
+register_heif_opener()
+
 
 def log_this(func):
     """Decorator to log function calls."""
 
-    @functools.wraps(func)
+    @functools.wraps(func)  # Too keep signature.
     def inner(*args, **kwargs):
         log.debug("Calling %s with %s, %s", func.__name__, args, kwargs)
         return func(*args, **kwargs)
@@ -106,6 +104,20 @@ def delete_file(event=None):
         paths_update()
 
 
+def help_handler(event=None):
+    """Show help."""
+    global SHOW_INFO
+    SHOW_INFO = not SHOW_INFO
+    if SHOW_INFO:
+        INFO_OVERLAY.config(
+            text=f"{__doc__}\nBinds:\n"
+            + "\n".join(f"{k}: {f.__name__}" for k, f in binds)
+        )
+        INFO_OVERLAY.lift()
+    else:
+        INFO_OVERLAY.lower()
+
+
 def image_load(path=None):
     """Loads image."""
     global PIL_IMAGE
@@ -120,7 +132,7 @@ def image_load(path=None):
     try:
         PIL_IMAGE = Image.open(path)
         log.debug("Cached %s PIL_IMAGE", PIL_IMAGE.size)
-        image_resize()
+        im_resize()
     except (
         tkinter.TclError,
         IOError,
@@ -140,74 +152,111 @@ def image_load(path=None):
         root.title(msg + " - " + TITLE)
 
 
-def image_resize():
+def im_fit(im):
+    """Fit image to window."""
+    w = root.winfo_width()
+    h = root.winfo_height()
+
+    log.debug("Fitting to window %s %sx%s", IMAGE_WIDGET.winfo_geometry(), w, h)
+    im_w, im_h = im.size
+    if (
+        (FIT_TYPE & FIT_ALL and (im_w != w or im_h != h))
+        or (FIT_TYPE & FIT_BIG and (im_w > w or im_h > h))
+        or (FIT_TYPE & FIT_SMALL and (im_w < w or im_h < h))
+    ):
+        ratio = min(w / im_w, h / im_h)
+        log.debug("Ratio: %s", ratio)
+        im = im.resize((int(im_w * ratio), int(im_h * ratio)), QUALITY)
+    return im
+
+
+def im_scale(im):
+    """Scale image."""
+    global SCALE
+    log.debug("Scaling to %s", SCALE)
+    im_w, im_h = im.size
+    try:
+        new_w = int(SCALE * im_w)
+        new_h = int(SCALE * im_h)
+        if new_w < 1 or new_h < 1:
+            log.error("Too small. Scaling up.")
+            SCALE = max(SCALE_MIN, min(SCALE * 1.1, SCALE_MAX))
+            # im = im_scale(im)
+        else:
+            im = PIL_IMAGE.resize((new_w, new_h), QUALITY)
+    except MemoryError as ex:
+        log.error("Out of memory. Scaling down. %s", ex)
+        SCALE = max(SCALE_MIN, min(SCALE * 0.9, SCALE_MAX))
+
+    return im
+
+
+def im_resize():
     """Resizes image."""
     if not PIL_IMAGE:
         return
 
-    pim = PIL_IMAGE.copy()
-
-    log.debug("Got cached %s", PIL_IMAGE.size)
-    im_w, im_h = PIL_IMAGE.size
+    im = PIL_IMAGE.copy()
 
     if FIT_TYPE:
-        w = root.winfo_width()
-        h = root.winfo_height()
-
-        log.debug("Fitting to window %s %sx%s", IMAGE_WIDGET.winfo_geometry(), w, h)
-        im_w, im_h = PIL_IMAGE.size
-        if im_w != w or im_h != h:
-            if (
-                FIT_TYPE & FIT_ALL
-                or (FIT_TYPE & FIT_BIG and (im_w > w or im_h > h))
-                or (FIT_TYPE & FIT_SMALL and (im_w < w or im_h < h))
-            ):
-                ratio = min(w / im_w, h / im_h)
-                log.debug("Ratio: %s", ratio)
-                pim = PIL_IMAGE.resize((int(im_w * ratio), int(im_h * ratio)), QUALITY)
+        im = im_fit(PIL_IMAGE)
 
     if SCALE != 1:
-        log.debug("Scaling to %s", SCALE)
-        try:
-            pim = PIL_IMAGE.resize(
-                (int(SCALE * im_w), int(SCALE * im_h)),
-                QUALITY,
-            )
-        except ValueError as ex:
-            log.error("Failed to scale. %s", ex)
+        im = im_scale(PIL_IMAGE)
 
     if TRANSPOSE_INDEX != -1:
         log.debug("Transposing %s", Transpose(TRANSPOSE_INDEX))
-        pim = pim.transpose(TRANSPOSE_INDEX)
+        im = im.transpose(TRANSPOSE_INDEX)
 
+    im_show(im)
+
+
+def im_show(im):
+    """Show PIL image in Tk image widget."""
+    global SCALE
     try:
-        im = ImageTk.PhotoImage(pim)
-        IMAGE_WIDGET.config(image=im, text="")  # Set it.
-        IMAGE_WIDGET.im = im  # Keep it. Why isn't this built in?!
-        msg = f"{path_index+1}/{len(paths)} {im_w}x{im_h} @ {'%sx%s' % pim.size} {paths[path_index]}"
-        root.title(msg + " - " + TITLE)
-
-        if SHOW_INFO:
-            exif = PIL_IMAGE.getexif()
-            if exif:
-                msg += " EXIF:\n"
-                for key, val in exif.items():
-                    if key in ExifTags.TAGS:
-                        msg += f"{ExifTags.TAGS[key]}: {val}\n"
-                    else:
-                        msg += f"Unknown EXIF tag {key}: {val}\n"
-
-                for k in ExifTags.IFD:
-                    try:
-                        msg += f"IFD tag {ExifTags.GPS[k]}: {exif.get_ifd(k)}\n"
-                    except KeyError:
-                        pass
-
-        INFO_OVERLAY.configure(text=msg)
-
+        tkim = ImageTk.PhotoImage(im)
+        IMAGE_WIDGET.config(image=tkim, text="")  # Set it.
+        IMAGE_WIDGET.tkim = tkim  # Keep it. Why isn't this built in?!
     except MemoryError as ex:
         log.error("Out of memory. Scaling down. %s", ex)
-        root.event_generate("<minus>")
+        SCALE = max(SCALE_MIN, min(SCALE * 0.9, SCALE_MAX))
+        return
+
+    msg = f"{path_index+1}/{len(paths)} {'%sx%s' % PIL_IMAGE.size} @ {'%sx%s' % im.size} {paths[path_index]}"
+    root.title(msg + " - " + TITLE)
+    INFO_OVERLAY.configure(text=msg + info_get())
+
+
+def info_get() -> str:
+    """Get image info."""
+    msg = ""
+    if not PIL_IMAGE:
+        return msg
+    # Exchangeable Image File (EXIF)
+    exif = PIL_IMAGE.getexif()
+    if exif:
+        msg += "\nEXIF:"
+        for key, val in exif.items():
+            if key in ExifTags.TAGS:
+                msg += f"\n{ExifTags.TAGS[key]}: {val}"
+            else:
+                msg += f"\nUnknown EXIF tag {key}: {val}"
+
+        # Image File Directory (IFD)
+        for k in ExifTags.IFD:
+            try:
+                msg += f"\nIFD tag {k}: {ExifTags.IFD(k)}: {exif.get_ifd(k)}"
+            except KeyError:
+                logging.debug("IFD not found. %s", k)
+
+    iptc = IptcImagePlugin.getiptcinfo(PIL_IMAGE)
+    if iptc:
+        msg += "\nIPTC:"
+        for k, v in iptc.items():
+            msg += "\nKey:{} Value:{}".format(k, repr(v.decode()))
+
+    return msg
 
 
 def info_toggle(event=None):
@@ -271,7 +320,7 @@ def resize_handler(event):
         INFO_OVERLAY.config(wraplength=event.width)
         STATUS_OVERLAY.config(wraplength=event.width)
         if WINDOW_SIZE and FIT_TYPE:
-            image_resize()
+            im_resize()
         WINDOW_SIZE = new_size
 
 
@@ -333,7 +382,7 @@ def transpose_inc(event=None):
         TRANSPOSE_INDEX = -1
     if TRANSPOSE_INDEX >= 0:
         toast(f"Transpose: {Transpose(TRANSPOSE_INDEX).name}")
-    image_resize()
+    im_resize()
 
 
 @log_this
@@ -345,7 +394,7 @@ def transpose_dec(event=None):
         TRANSPOSE_INDEX = len(Transpose) - 1
     if TRANSPOSE_INDEX >= 0:
         toast(f"Transpose: {Transpose(TRANSPOSE_INDEX).name}")
-    image_resize()
+    im_resize()
 
 
 @log_this
@@ -374,7 +423,7 @@ def fullscreen_toggle(event=None):
 
 
 @log_this
-def zoom(event=None):
+def zoom(event):
     """Zooms."""
     global SCALE
     k = event.keysym if event else "plus"
@@ -388,9 +437,8 @@ def zoom(event=None):
         SCALE *= 0.9
     else:
         SCALE = 1
-    SCALE = max(SCALE, 0.01)
-    SCALE = min(SCALE, 40.0)
-    image_resize()
+    SCALE = max(SCALE_MIN, min(SCALE, SCALE_MAX))
+    im_resize()
 
 
 root = tkinter.Tk()
@@ -438,6 +486,9 @@ root.bind_all("<Key>", debug_keys)
 
 binds = [
     ("<Escape>", close),
+    ("<q>", close),
+    ("<F1>", help_handler),
+    ("<h>", help_handler),
     ("<f>", fullscreen_toggle),
     ("<F11>", fullscreen_toggle),
     ("<Return>", fullscreen_toggle),
@@ -473,7 +524,7 @@ def main(args):
     global FIT_TYPE, QUALITY, REFRESH_INTERVAL, SLIDESHOW_PAUSE, TRANSPOSE_INDEX, VERBOSITY
 
     if args.verbose:
-        VERBOSITY = VERBOSITY_LEVELS[1 + args.verbose]
+        VERBOSITY = VERBOSITY_LEVELS[max(len(VERBOSITY_LEVELS) - 1, 1 + args.verbose)]
         set_verbosity()
 
     log.debug("Args: %s", args)
@@ -511,8 +562,9 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
+        prog="tk_image_viewer",
         description="An image viewer that supports both arrow keys and "
-        + "WebP with foreign characters in long paths."
+        + "WebP with foreign characters in long paths.",
     )
     parser.add_argument("path", default=os.getcwd(), nargs="?")
     parser.add_argument(
