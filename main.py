@@ -98,7 +98,7 @@ def browse(event=None):
 
 @log_this
 def close(event=None):
-    """Closes fullscreen or app."""
+    """Close fullscreen or app."""
     if root.overrideredirect():
         fullscreen_toggle()
     else:
@@ -108,7 +108,7 @@ def close(event=None):
 
 @log_this
 def debug_keys(event=None):
-    """Shows all keys."""
+    """Show all keys."""
 
 
 def delete_file(event=None):
@@ -127,8 +127,8 @@ def help_handler(event=None):
     global SHOW_INFO
     SHOW_INFO = not SHOW_INFO
     if SHOW_INFO:
-        msg = f"{__doc__}\nBinds:\n" + "\n".join(
-            f"{keys} - {fun.__doc__}" for fun, keys in binds
+        msg = f"{TITLE}\nBinds:\n" + "\n".join(
+            f"{keys} - {fun.__doc__}" for fun, keys in binds if not "Configure" in keys
         )
         log.debug(msg)
         INFO_OVERLAY.config(text=msg)
@@ -138,7 +138,7 @@ def help_handler(event=None):
 
 
 def image_load(path=None):
-    """Loads image."""
+    """Load image."""
     global IMAGE, INFO
 
     if not path:
@@ -191,7 +191,7 @@ def image_load(path=None):
 
 
 def get_fit_ratio():
-    """Gets fit ratio."""
+    """Get fit ratio."""
     ratio = 1.0
     w = root.winfo_width()
     h = root.winfo_height()
@@ -237,7 +237,7 @@ def im_scale(im):
 
 
 def im_resize():
-    """Resizes image."""
+    """Resize image."""
     if not IMAGE:
         return
 
@@ -314,7 +314,7 @@ def info_get() -> str:
 
 
 def info_toggle(event=None):
-    """Toggles info overlay."""
+    """Toggle info overlay."""
     global SHOW_INFO
     SHOW_INFO = not SHOW_INFO
     if SHOW_INFO:
@@ -326,7 +326,7 @@ def info_toggle(event=None):
 
 @log_this
 def mouse_handler(event=None):
-    """Handles mouse events."""
+    """Handle mouse events."""
     if event.num == 5 or event.delta < 0:
         root.event_generate("<Down>")
     if event.num == 4 or event.delta > 0:
@@ -337,7 +337,7 @@ SUPPORTED_FILES: list = []
 
 
 def set_supported_files():
-    """Sets supported files. TODO: Distinguish between openable and saveable."""
+    """Set supported files. TODO: Distinguish between openable and saveable."""
     global SUPPORTED_FILES
     exts = Image.registered_extensions()
     type_exts = {}
@@ -367,7 +367,9 @@ def path_save(event=None):
     """Save a file using the filepicker."""
     path = paths[path_index]
     p = pathlib.Path(path)
-    filename = filedialog.asksaveasfilename(initialfile=p.absolute(), defaultextension=p.suffix, filetypes=SUPPORTED_FILES)
+    filename = filedialog.asksaveasfilename(
+        initialfile=p.absolute(), defaultextension=p.suffix, filetypes=SUPPORTED_FILES
+    )
     if filename:
         log.info("Saving %s", filename)
         try:
@@ -382,7 +384,7 @@ def path_save(event=None):
 
 @log_this
 def paths_update(event=None, path=None):
-    """Refreshes path info."""
+    """Refresh path info."""
     global paths, path_index
     if not path:
         path = paths[path_index]
@@ -404,14 +406,14 @@ def paths_update(event=None, path=None):
 
 
 def update_loop():
-    """Autoupdates paths."""
+    """Autoupdate paths."""
     if REFRESH_INTERVAL:
         paths_update()
         root.after(REFRESH_INTERVAL, update_loop)
 
 
 def resize_handler(event):
-    """Handles Tk resize event."""
+    """Handle Tk resize event."""
     global WINDOW_SIZE
     new_size = root.winfo_geometry().split("+", maxsplit=1)[0]
     if WINDOW_SIZE != new_size:
@@ -427,7 +429,7 @@ def resize_handler(event):
 
 @log_this
 def set_bg(event=None):
-    """Sets background color."""
+    """Set background color."""
     global BG_INDEX
     BG_INDEX += 1
     if BG_INDEX >= len(BG_COLORS):
@@ -439,7 +441,7 @@ def set_bg(event=None):
 
 @log_this
 def set_verbosity(event=None):
-    """Sets verbosity."""
+    """Set verbosity."""
     global VERBOSITY
     VERBOSITY -= 10
     if VERBOSITY < 10:
@@ -450,14 +452,14 @@ def set_verbosity(event=None):
 
 
 def slideshow_run(event=None):
-    """Runs slideshow."""
+    """Run slideshow."""
     if SLIDESHOW_ON:
         browse()
         root.after(SLIDESHOW_PAUSE, slideshow_run)
 
 
 def slideshow_toggle(event=None):
-    """Toggles slideshow."""
+    """Toggle slideshow."""
     global SLIDESHOW_ON
     SLIDESHOW_ON = not SLIDESHOW_ON
     if SLIDESHOW_ON:
@@ -467,8 +469,8 @@ def slideshow_toggle(event=None):
         toast("Stopping slideshow.")
 
 
-def toast(msg: str, ms: int = 1000):
-    """Temporarily shows a status message."""
+def toast(msg: str, ms: int = 2000):
+    """Temporarily show a status message."""
     STATUS_OVERLAY.config(text=msg)
     STATUS_OVERLAY.lift()
     root.after(ms, STATUS_OVERLAY.lower)
@@ -500,7 +502,7 @@ def transpose_dec(event=None):
 
 @log_this
 def fit_handler(event):
-    """Changes type of window fitting."""
+    """Change type of window fitting."""
     global FIT
     FIT = (FIT + 1) % len(Fits)
     toast(Fits(FIT))
@@ -509,7 +511,7 @@ def fit_handler(event):
 
 @log_this
 def fullscreen_toggle(event=None):
-    """Toggles fullscreen."""
+    """Toggle fullscreen."""
     if not root.overrideredirect():
         root.old_geometry = root.geometry()
         root.old_state = root.state()
@@ -534,7 +536,7 @@ def fullscreen_toggle(event=None):
 
 @log_this
 def zoom(event):
-    """Zooms."""
+    """Zoom."""
     global SCALE
     k = event.keysym if event else "plus"
     if event.num == 5 or event.delta == -120:

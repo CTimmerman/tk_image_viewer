@@ -25,22 +25,21 @@ options:
 Binds:
 
 ```pre
-Escape q - Closes fullscreen or app.
+Escape q - Close fullscreen or app.
 F1 h - Show help.
-F11 Return f - Toggles fullscreen.
+F11 Return f - Toggle fullscreen.
 Left Right Up Down Key-1 x - Go to next or previous file.
-MouseWheel Button-4 Button-5 - Handles mouse events.
+MouseWheel Button-4 Button-5 - Handle mouse events.
 o - Open a file using the filepicker.
 s - Save a file using the filepicker.
-F5 u - Refreshes path info.
-b c - Sets background color.
-Control-MouseWheel minus plus equal - Zooms.
-r - Changes type of window fitting.
-Pause - Toggles slideshow.
+F5 u - Refresh path info.
+b c - Set background color.
+Control-MouseWheel minus plus equal - Zoom.
+r - Change type of window fitting.
+Pause - Toggle slideshow.
 t - Increment transpose.
 T - Decrement transpose.
-v - Sets verbosity.
-i - Toggles info overlay.
-Configure - Handles Tk resize event.
+v - Set verbosity.
+i - Toggle info overlay.
 Delete - Delete file.
 ```
