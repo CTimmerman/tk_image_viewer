@@ -645,6 +645,9 @@ def main(args):
     if args.fullscreen:
         root.after(500, fullscreen_toggle)
 
+    if args.geometry:
+        root.geometry(args.geometry)
+
     if args.update:
         REFRESH_INTERVAL = args.update
         root.after(REFRESH_INTERVAL, update_loop)
@@ -670,13 +673,17 @@ if __name__ == "__main__":
     )
     parser.add_argument("path", default=os.getcwd(), nargs="?")
     parser.add_argument(
+        "--geometry",
+        "-g",
+        metavar="WxH+X+Y",
+        help="set window geometry, eg -g +0+-999",
+        type=str,
+    )
+    parser.add_argument(
         "--fullscreen",
         "-f",
-        metavar="N",
-        nargs="?",
-        help="run in fullscreen on display N (1-?, default 1)",
-        const=1,
-        type=int,
+        action='store_true',
+        help="run fullscreen",
     )
     parser.add_argument(
         "--resize",
@@ -685,7 +692,7 @@ if __name__ == "__main__":
         nargs="?",
         help="resize image to fit window (0-3: none, all, big, small. default 0)",
         const=1,
-        type=int,
+        type=lambda s: int(s) if 0 <= int(s) <= 3 else 0,
     )
     parser.add_argument(
         "--quality",
