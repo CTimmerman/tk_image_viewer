@@ -1,28 +1,36 @@
 # pylint: disable=consider-using-f-string, global-statement, line-too-long, too-many-boolean-expressions, too-many-branches, unused-argument, use-maxsplit-arg
 """Tk Image Viewer
-by Cees Timmerman, 2024-03-17."""
+by Cees Timmerman, 2024-03-17 to 2024-03-23."""
 
+import enum
 import functools
 import logging
 import os
 import pathlib
+from random import randint
+import time
 import tkinter
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
 
 from PIL import ExifTags, Image, ImageTk, IptcImagePlugin
 from PIL.Image import Transpose
 from pillow_heif import register_heif_opener  # type: ignore
 
 
+class Fits(enum.IntEnum):
+    """Types of window fitting."""
+
+    NONE = 0
+    ALL = 1
+    BIG = 2
+    SMALL = 3
+
+
 BG_COLORS = ["black", "gray10", "gray50", "white"]
 BG_INDEX = -1
-
-FIT_TYPE = 0
-FIT_ALL = 1
-FIT_BIG = 2
-FIT_SMALL = 4
-
-PIL_IMAGE = None  # type: ignore
+FIT = 0
+IMAGE: Image.Image | None = None
+INFO: dict = {}
 QUALITY = Image.Resampling.NEAREST  # 0
 REFRESH_INTERVAL = 0
 SCALE = 1.0
@@ -64,13 +72,19 @@ def log_this(func):
 
 @log_this
 def browse(event=None):
-    """Selects next or previous file."""
+    """Go to next or previous file."""
     global path_index
 
-    k = event.keysym if event else "Right"
-    delta = -1 if k in ("Left", "Up") else 1
+    k = event.keysym if event else "Next"
+    if k == "1":
+        path_index = 0
+    elif k == "x":
+        path_index = randint(0, len(paths) - 1)
+    elif k in ("Left", "Up", "Button-4"):
+        path_index -= 1
+    else:
+        path_index += 1
 
-    path_index += delta
     if path_index < 0:
         path_index = len(paths) - 1
     if path_index >= len(paths):
@@ -88,7 +102,7 @@ def close(event=None):
         event.widget.withdraw()
         event.widget.quit()
 
-
+@log_this
 def debug_keys(event=None):
     """Shows all keys."""
 
@@ -109,10 +123,11 @@ def help_handler(event=None):
     global SHOW_INFO
     SHOW_INFO = not SHOW_INFO
     if SHOW_INFO:
-        INFO_OVERLAY.config(
-            text=f"{__doc__}\nBinds:\n"
-            + "\n".join(f"{k}: {f.__name__}" for k, f in binds)
+        msg = f"{__doc__}\nBinds:\n" + "\n".join(
+            f"{keys} - {fun.__doc__}" for fun, keys in binds
         )
+        log.debug(msg)
+        INFO_OVERLAY.config(text=msg)
         INFO_OVERLAY.lift()
     else:
         INFO_OVERLAY.lower()
@@ -120,7 +135,7 @@ def help_handler(event=None):
 
 def image_load(path=None):
     """Loads image."""
-    global PIL_IMAGE
+    global IMAGE
 
     if not path:
         path = paths[path_index]
@@ -130,8 +145,27 @@ def image_load(path=None):
 
     err_msg = ""
     try:
-        PIL_IMAGE = Image.open(path)
-        log.debug("Cached %s PIL_IMAGE", PIL_IMAGE.size)
+        stats = os.stat(path)
+        log.debug("Stat: %s", stats)
+        INFO = {
+            "Size": stats.st_size,
+            "Accessed": time.strftime(
+                "%Y-%m-%d %H:%M:%S", time.localtime(stats.st_atime)
+            ),
+            "Modified": time.strftime(
+                "%Y-%m-%d %H:%M:%S", time.localtime(stats.st_mtime)
+            ),
+            "Created": time.strftime(
+                "%Y-%m-%d %H:%M:%S",
+                time.localtime(
+                    stats.st_birthtime
+                    if hasattr(stats, "st_birthtime")
+                    else stats.st_ctime
+                ),
+            ),
+        }
+        IMAGE = Image.open(path)
+        log.debug("Cached %s PIL_IMAGE", IMAGE.size)
         im_resize()
     except (
         tkinter.TclError,
@@ -144,7 +178,7 @@ def image_load(path=None):
     ) as ex:
         err_msg = str(ex)
         log.error(err_msg)
-        PIL_IMAGE = None
+        IMAGE = None
         msg = f"{msg} {err_msg} {path}"
         IMAGE_WIDGET.config(image="", text=msg)
         IMAGE_WIDGET.im = None
@@ -152,21 +186,27 @@ def image_load(path=None):
         root.title(msg + " - " + TITLE)
 
 
-def im_fit(im):
-    """Fit image to window."""
+def get_fit_ratio():
+    """Gets fit ratio."""
+    ratio = 1.0
     w = root.winfo_width()
     h = root.winfo_height()
-
-    log.debug("Fitting to window %s %sx%s", IMAGE_WIDGET.winfo_geometry(), w, h)
-    im_w, im_h = im.size
+    im_w, im_h = IMAGE.size
     if (
-        (FIT_TYPE & FIT_ALL and (im_w != w or im_h != h))
-        or (FIT_TYPE & FIT_BIG and (im_w > w or im_h > h))
-        or (FIT_TYPE & FIT_SMALL and (im_w < w or im_h < h))
+        ((FIT == Fits.ALL) and (im_w != w or im_h != h))
+        or ((FIT == Fits.BIG) and (im_w > w or im_h > h))
+        or ((FIT == Fits.SMALL) and (im_w < w or im_h < h))
     ):
         ratio = min(w / im_w, h / im_h)
-        log.debug("Ratio: %s", ratio)
-        im = im.resize((int(im_w * ratio), int(im_h * ratio)), QUALITY)
+    return ratio
+
+
+def im_fit(im):
+    """Fit image to window."""
+    ratio = get_fit_ratio()
+    if ratio != 1.0:
+        w, h = im.size
+        im = im.resize((int(w * ratio), int(h * ratio)), QUALITY)
     return im
 
 
@@ -175,15 +215,16 @@ def im_scale(im):
     global SCALE
     log.debug("Scaling to %s", SCALE)
     im_w, im_h = im.size
+    ratio = SCALE * get_fit_ratio()
     try:
-        new_w = int(SCALE * im_w)
-        new_h = int(SCALE * im_h)
+        new_w = int(ratio * im_w)
+        new_h = int(ratio * im_h)
         if new_w < 1 or new_h < 1:
             log.error("Too small. Scaling up.")
             SCALE = max(SCALE_MIN, min(SCALE * 1.1, SCALE_MAX))
-            # im = im_scale(im)
+            im = im_scale(im)
         else:
-            im = PIL_IMAGE.resize((new_w, new_h), QUALITY)
+            im = IMAGE.resize((new_w, new_h), QUALITY)
     except MemoryError as ex:
         log.error("Out of memory. Scaling down. %s", ex)
         SCALE = max(SCALE_MIN, min(SCALE * 0.9, SCALE_MAX))
@@ -193,16 +234,16 @@ def im_scale(im):
 
 def im_resize():
     """Resizes image."""
-    if not PIL_IMAGE:
+    if not IMAGE:
         return
 
-    im = PIL_IMAGE.copy()
+    im = IMAGE.copy()
 
-    if FIT_TYPE:
-        im = im_fit(PIL_IMAGE)
+    if FIT:
+        im = im_fit(IMAGE)
 
     if SCALE != 1:
-        im = im_scale(PIL_IMAGE)
+        im = im_scale(IMAGE)
 
     if TRANSPOSE_INDEX != -1:
         log.debug("Transposing %s", Transpose(TRANSPOSE_INDEX))
@@ -223,38 +264,48 @@ def im_show(im):
         SCALE = max(SCALE_MIN, min(SCALE * 0.9, SCALE_MAX))
         return
 
-    msg = f"{path_index+1}/{len(paths)} {'%sx%s' % PIL_IMAGE.size} @ {'%sx%s' % im.size} {paths[path_index]}"
+    msg = f"{path_index+1}/{len(paths)} {'%sx%s' % IMAGE.size} @ {'%sx%s' % im.size} {paths[path_index]}"
     root.title(msg + " - " + TITLE)
     INFO_OVERLAY.configure(text=msg + info_get())
 
 
 def info_get() -> str:
     """Get image info."""
-    msg = ""
-    if not PIL_IMAGE:
+    msg = "\n".join(f"{k}: {v}" for k, v in INFO.items())
+    if not IMAGE:
         return msg
+
+    # Image File Directories (IFD)
+    from PIL.TiffTags import TAGS
+
+    if hasattr(IMAGE, "tag_v2"):
+        meta_dict = {TAGS[key]: IMAGE.tag[key] for key in IMAGE.tag_v2}
+        print(meta_dict)
+
     # Exchangeable Image File (EXIF)
-    exif = PIL_IMAGE.getexif()
-    if exif:
-        msg += "\nEXIF:"
-        for key, val in exif.items():
-            if key in ExifTags.TAGS:
-                msg += f"\n{ExifTags.TAGS[key]}: {val}"
-            else:
-                msg += f"\nUnknown EXIF tag {key}: {val}"
+    if hasattr(IMAGE, "_getexif"):
+        exif = IMAGE._getexif()  # pylint: disable=protected-access
+        if exif:
+            msg += "\nEXIF:"
+            for key, val in exif.items():
+                if key in ExifTags.TAGS:
+                    msg += f"\n{ExifTags.TAGS[key]}: {val}"
+                else:
+                    msg += f"\nUnknown EXIF tag {key}: {val}"
 
         # Image File Directory (IFD)
+        exif = IMAGE.getexif()
         for k in ExifTags.IFD:
             try:
                 msg += f"\nIFD tag {k}: {ExifTags.IFD(k)}: {exif.get_ifd(k)}"
             except KeyError:
-                logging.debug("IFD not found. %s", k)
+                log.debug("IFD not found. %s", k)
 
-    iptc = IptcImagePlugin.getiptcinfo(PIL_IMAGE)
+    iptc = IptcImagePlugin.getiptcinfo(IMAGE)
     if iptc:
         msg += "\nIPTC:"
         for k, v in iptc.items():
-            msg += "\nKey:{} Value:{}".format(k, repr(v.decode()))
+            msg += "\nKey:{} Value:{}".format(k, repr(v))
 
     return msg
 
@@ -270,12 +321,47 @@ def info_toggle(event=None):
 
 
 @log_this
-def mouse_wheel(event=None):
+def mouse_handler(event=None):
     """Handles mouse events."""
-    if event.num == 5 or event.delta == -120:
+    if event.num == 5 or event.delta < 0:
         root.event_generate("<Down>")
-    if event.num == 4 or event.delta == 120:
+    if event.num == 4 or event.delta > 0:
         root.event_generate("<Up>")
+
+
+@log_this
+def path_open(event=None):
+    """Open a file using the filepicker."""
+    exts = Image.registered_extensions()
+    type_exts = {}
+    for k, v in exts.items():
+        type_exts.setdefault(v, []).append(k)
+
+    ftypes = [
+        ("All supported files", " ".join(sorted(list(exts)))),
+        ("All files", "*"),
+        *sorted(type_exts.items()),
+    ]
+    filename = filedialog.askopenfilename(filetypes=ftypes)
+    paths_update(None, filename)
+
+
+@log_this
+def path_save(event=None):
+    """Save a file using the filepicker."""
+    exts = Image.registered_extensions()
+    log.debug("exts: %s", exts)
+    supported_extensions = [ex[1] for ex, f in exts.items() if f in Image.OPEN]
+    log.debug("openable exts: %s", supported_extensions)
+    filename = filedialog.asksaveasfilename(filetypes=exts)
+    log.info("Saving %s", filename)
+    try:
+        IMAGE.save(filename)
+        toast(f"Saved {filename}")
+    except IOError as ex:
+        msg = f"Failed to save as {filename}. {ex}"
+        log.error(msg)
+        toast(msg)
 
 
 @log_this
@@ -308,7 +394,6 @@ def update_loop():
         root.after(REFRESH_INTERVAL, update_loop)
 
 
-@log_this
 def resize_handler(event):
     """Handles Tk resize event."""
     global WINDOW_SIZE
@@ -319,7 +404,7 @@ def resize_handler(event):
         IMAGE_WIDGET.config(wraplength=event.width)
         INFO_OVERLAY.config(wraplength=event.width)
         STATUS_OVERLAY.config(wraplength=event.width)
-        if WINDOW_SIZE and FIT_TYPE:
+        if WINDOW_SIZE and FIT:
             im_resize()
         WINDOW_SIZE = new_size
 
@@ -398,6 +483,15 @@ def transpose_dec(event=None):
 
 
 @log_this
+def fit_handler(event):
+    """Changes type of window fitting."""
+    global FIT
+    FIT = (FIT + 1) % len(Fits)
+    toast(Fits(FIT))
+    im_resize()
+
+
+@log_this
 def fullscreen_toggle(event=None):
     """Toggles fullscreen."""
     if not root.overrideredirect():
@@ -444,7 +538,7 @@ def zoom(event):
 root = tkinter.Tk()
 root.title(TITLE)
 screen_w, screen_h = root.winfo_screenwidth(), root.winfo_screenheight()
-geometry = f"{int(screen_w / 2)}x{int(screen_h / 2)}+100+100"
+geometry = f"{screen_w // 2}x{screen_h // 2}+100+100"
 root.geometry(geometry)
 SLIDESHOW_ON = False
 SLIDESHOW_PAUSE = 4000
@@ -485,52 +579,37 @@ set_bg()
 root.bind_all("<Key>", debug_keys)
 
 binds = [
-    ("<Escape>", close),
-    ("<q>", close),
-    ("<F1>", help_handler),
-    ("<h>", help_handler),
-    ("<f>", fullscreen_toggle),
-    ("<F11>", fullscreen_toggle),
-    ("<Return>", fullscreen_toggle),
-    ("<Left>", browse),
-    ("<Right>", browse),
-    ("<Up>", browse),
-    ("<Down>", browse),
-    ("<MouseWheel>", mouse_wheel),
-    ("<Button-4>", mouse_wheel),
-    ("<Button-5>", mouse_wheel),
-    ("<u>", paths_update),
-    ("<F5>", paths_update),
-    ("<c>", set_bg),
-    ("<Control-MouseWheel>", zoom),
-    ("<minus>", zoom),
-    ("<plus>", zoom),
-    ("<equal>", zoom),
-    ("<s>", slideshow_toggle),
-    ("<Pause>", slideshow_toggle),
-    ("<t>", transpose_inc),
-    ("<T>", transpose_dec),
-    ("<v>", set_verbosity),
-    ("<i>", info_toggle),
-    ("<Configure>", resize_handler),
-    ("<Delete>", delete_file),
+    (close, "Escape q"),
+    (help_handler, "F1 h"),
+    (fullscreen_toggle, "F11 Return f"),
+    (browse, "Left Right Up Down Key-1 x"),
+    (mouse_handler, "MouseWheel Button-4 Button-5"),
+    (path_open, "o"),
+    (paths_update, "F5 u"),
+    (set_bg, "b c"),
+    (zoom, "Control-MouseWheel minus plus equal"),
+    (fit_handler, "r"),
+    (slideshow_toggle, "s Pause"),
+    (transpose_inc, "t"),
+    (transpose_dec, "T"),
+    (set_verbosity, "v"),
+    (info_toggle, "i"),
+    (resize_handler, "Configure"),
+    (delete_file, "Delete"),
 ]
-for b in binds:
-    root.bind(b[0], b[1])
 
 
 def main(args):
     """Main function."""
-    global FIT_TYPE, QUALITY, REFRESH_INTERVAL, SLIDESHOW_PAUSE, TRANSPOSE_INDEX, VERBOSITY
+    global FIT, QUALITY, REFRESH_INTERVAL, SLIDESHOW_PAUSE, TRANSPOSE_INDEX, VERBOSITY
 
     if args.verbose:
-        VERBOSITY = VERBOSITY_LEVELS[max(len(VERBOSITY_LEVELS) - 1, 1 + args.verbose)]
+        VERBOSITY = VERBOSITY_LEVELS[min(len(VERBOSITY_LEVELS) - 1, 1 + args.verbose)]
         set_verbosity()
 
     log.debug("Args: %s", args)
-    log.debug("Binds %s", "\n".join(f"{k}: {f.__name__}" for k, f in binds))
 
-    FIT_TYPE = args.resize
+    FIT = args.resize or 0
     QUALITY = [
         Image.Resampling.NEAREST,
         Image.Resampling.BOX,
@@ -555,6 +634,10 @@ def main(args):
         SLIDESHOW_PAUSE = args.slideshow
         slideshow_toggle()
 
+    for b in binds:
+        func = b[0]
+        for event in b[1].split(" "):
+            root.bind(f"<{event}>", func)
     root.mainloop()
 
 
