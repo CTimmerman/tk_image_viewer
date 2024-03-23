@@ -3,7 +3,7 @@
 An image viewer that supports both arrow keys and WebP with foreign characters in long paths, unlike IrfanView 64 4.54 and JPEGView 1.0.37.
 
 ```pre
-usage: img_viewer.py [-h] [--fullscreen [N]] [--resize [N]] [--quality N] [--update [ms]] [--slideshow [ms]] [--transpose N] [-v] [path]
+usage: tk_image_viewer [-h] [--fullscreen [N]] [--resize [N]] [--quality N] [--update [ms]] [--slideshow [ms]] [--transpose N] [-v] [path]
 
 positional arguments:
   path
@@ -26,6 +26,9 @@ Binds:
 
 ```pre
 <Escape>: close
+<q>: close
+<F1>: help_handler
+<h>: help_handler
 <f>: fullscreen_toggle
 <F11>: fullscreen_toggle
 <Return>: fullscreen_toggle
@@ -49,6 +52,5 @@ Binds:
 <T>: transpose_dec
 <v>: set_verbosity
 <i>: info_toggle
-<Configure>: resize_handler
 <Delete>: delete_file
 ```
