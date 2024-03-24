@@ -1,4 +1,4 @@
-# pylint: disable=consider-using-f-string, global-statement, line-too-long, too-many-boolean-expressions, too-many-branches, unused-argument, use-maxsplit-arg
+# pylint: disable=consider-using-f-string, global-statement, unused-argument
 """Tk Image Viewer
 by Cees Timmerman
 2024-03-17 First version.
@@ -46,7 +46,7 @@ SCALE_MIN = 0.001
 SCALE_MAX = 40.0
 SCALE_TEXT = 1.0
 SHOW_INFO = False
-TITLE = __doc__.split("\n")[0]
+TITLE = __doc__.split("\n", 1)[0]
 TRANSPOSE_INDEX = -1
 VERBOSITY_LEVELS = [
     logging.CRITICAL,
@@ -340,7 +340,10 @@ def im_show(im):
         if "Names" in INFO
         else ""
     )
-    msg = f"{path_index+1}/{len(paths)}{zip_info} {'%sx%s' % IMAGE.size} @ {'%sx%s' % im.size} {paths[path_index]}"
+    msg = (
+        f"{path_index+1}/{len(paths)}{zip_info} {'%sx%s' % IMAGE.size}"
+        f" @ {'%sx%s' % im.size} {paths[path_index]}"
+    )
     root.title(msg + " - " + TITLE)
     INFO_OVERLAY.configure(text=msg + "\n" + info_get())
 
@@ -462,7 +465,7 @@ def path_save(event=None):
                 # icc_profile=INFO.get("icc_profile", b""),
                 **IMAGE.info,
                 optimize=True,
-                #save_all=True,
+                # save_all=True,
             )
             paths_update()
             toast(f"Saved {filename}")
