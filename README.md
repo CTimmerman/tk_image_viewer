@@ -3,23 +3,23 @@
 An image viewer that supports both arrow keys and WebP with foreign characters in long paths, unlike IrfanView 64 4.54 and JPEGView 1.0.37.
 
 ```pre
-usage: tk_image_viewer [-h] [--geometry WxH+X+Y] [--fullscreen] [--resize [N]] [--quality N] [--update [ms]] [--slideshow [ms]] [--transpose N] [-v] [path]
+usage: tk_image_viewer [-h] [--fullscreen] [--geometry WxH+X+Y] [--quality N] [--resize [N]] [--slideshow [ms]] [--transpose N] [--update [ms]] [-v] [path]
 
 positional arguments:
   path
 
 options:
   -h, --help            show this help message and exit
+  --fullscreen, -f      run fullscreen
   --geometry WxH+X+Y, -g WxH+X+Y
                         set window geometry, eg -g +0+-999
-  --fullscreen, -f      run fullscreen
-  --resize [N], -r [N]  resize image to fit window (0-3: none, all, big, small. default 0)
   --quality N, -q N     set antialiasing level (0-5, default 0)
-  --update [ms], -u [ms]
-                        update interval (default 4000)
+  --resize [N], -r [N]  resize image to fit window (0-3: none, all, big, small. default 0)
   --slideshow [ms], -s [ms]
                         switch to next image every N ms (default 4000)
   --transpose N, -t N   transpose 0-6 flip_left_right, flip_top_bottom, rotate_90, rotate_180, rotate_270, transpose, transverse
+  --update [ms], -u [ms]
+                        update interval (default 4000)
   -v, --verbose         set log level
 ```
 
