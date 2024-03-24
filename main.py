@@ -211,6 +211,7 @@ def image_load(path=None):
                 # imgdata = archive.open('img_01.png')
                 # IMAGE = io.BytesIO(imgdata)
                 log.debug("Loading name index %s", ZIP_INDEX)
+                # pylint: disable=consider-using-with
                 IMAGE = Image.open(zf.open(names[ZIP_INDEX]))
         else:
             IMAGE = Image.open(path)
