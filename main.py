@@ -3,6 +3,7 @@
 by Cees Timmerman
 2024-03-17 First version.
 2024-03-23 Save stuff.
+2024-03-24 Animated GIF support.
 """
 
 import enum
@@ -33,6 +34,7 @@ BG_COLORS = ["black", "gray10", "gray50", "white"]
 BG_INDEX = -1
 FIT = 0
 IMAGE: Image.Image | None = None
+IM_FRAME = 0
 INFO: dict = {}
 QUALITY = Image.Resampling.NEAREST  # 0
 REFRESH_INTERVAL = 0
@@ -152,6 +154,7 @@ def image_load(path=None):
         stats = os.stat(path)
         log.debug("Stat: %s", stats)
         INFO = {
+            # "Path": pathlib.Path(path),
             "Size": f"{stats.st_size:,} B",
             "Accessed": time.strftime(
                 "%Y-%m-%d %H:%M:%S", time.localtime(stats.st_atime)
@@ -170,6 +173,10 @@ def image_load(path=None):
         }
         IMAGE = Image.open(path)
         log.debug("Cached %s PIL_IMAGE", IMAGE.size)
+        if hasattr(IMAGE, "n_frames"):
+            INFO["Frames"] = IMAGE.n_frames
+        INFO.update(**IMAGE.info)
+        log.debug("info: %s", INFO)
         im_resize()
     except (
         tkinter.TclError,
@@ -238,6 +245,7 @@ def im_scale(im):
 
 def im_resize():
     """Resize image."""
+    global IM_FRAME
     if not IMAGE:
         return
 
@@ -255,12 +263,24 @@ def im_resize():
 
     im_show(im)
 
+    if hasattr(IMAGE, "n_frames") and IMAGE.n_frames > 1:
+        IM_FRAME = (IM_FRAME + 1) % IMAGE.n_frames
+        try:
+            IMAGE.seek(IM_FRAME)
+        except EOFError as ex:
+            log.error("IMAGE EOF. %s", ex)
+        duration = INFO["duration"] if "duration" in INFO else 100
+        log.debug("Duration %s", duration)
+        root.after(duration, im_resize)
 
+
+@log_this
 def im_show(im):
     """Show PIL image in Tk image widget."""
     global SCALE
     try:
-        tkim = ImageTk.PhotoImage(im)
+        log.debug("Showing tkim")
+        tkim = ImageTk.PhotoImage(im)  # , format=fmt)
         IMAGE_WIDGET.config(image=tkim, text="")  # Set it.
         IMAGE_WIDGET.tkim = tkim  # Keep it. Why isn't this built in?!
     except MemoryError as ex:
@@ -275,7 +295,7 @@ def im_show(im):
 
 def info_get() -> str:
     """Get image info."""
-    msg = "\n".join(f"{k}: {v}" for k, v in INFO.items())
+    msg = "\n".join(f"{k}: {(str(v)[:80] + '...') if isinstance(v, bytes) and len(v) > 80 else v}" for k, v in INFO.items())
     if not IMAGE:
         return msg
 
@@ -673,26 +693,17 @@ if __name__ == "__main__":
     )
     parser.add_argument("path", default=os.getcwd(), nargs="?")
     parser.add_argument(
+        "--fullscreen",
+        "-f",
+        action="store_true",
+        help="run fullscreen",
+    )
+    parser.add_argument(
         "--geometry",
         "-g",
         metavar="WxH+X+Y",
         help="set window geometry, eg -g +0+-999",
         type=str,
-    )
-    parser.add_argument(
-        "--fullscreen",
-        "-f",
-        action='store_true',
-        help="run fullscreen",
-    )
-    parser.add_argument(
-        "--resize",
-        "-r",
-        metavar="N",
-        nargs="?",
-        help="resize image to fit window (0-3: none, all, big, small. default 0)",
-        const=1,
-        type=lambda s: int(s) if 0 <= int(s) <= 3 else 0,
     )
     parser.add_argument(
         "--quality",
@@ -703,13 +714,13 @@ if __name__ == "__main__":
         type=int,
     )
     parser.add_argument(
-        "--update",
-        "-u",
-        metavar="ms",
+        "--resize",
+        "-r",
+        metavar="N",
         nargs="?",
-        help="update interval (default 4000)",
-        const=4000,
-        type=int,
+        help="resize image to fit window (0-3: none, all, big, small. default 0)",
+        const=1,
+        type=lambda s: int(s) if 0 <= int(s) <= 3 else 0,
     )
     parser.add_argument(
         "--slideshow",
@@ -726,6 +737,15 @@ if __name__ == "__main__":
         metavar="N",
         help=f"transpose 0-{len(Transpose)-1} {', '.join(x.name.lower() for x in Transpose)}",
         default=-1,
+        type=int,
+    )
+    parser.add_argument(
+        "--update",
+        "-u",
+        metavar="ms",
+        nargs="?",
+        help="update interval (default 4000)",
+        const=4000,
         type=int,
     )
     parser.add_argument(
