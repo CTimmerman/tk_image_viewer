@@ -1,6 +1,6 @@
 # Tk Image Viewer
 
-An image viewer that supports both arrow keys and WebP with foreign characters in long paths, unlike IrfanView 64 4.54 and JPEGView 1.0.37.
+An image viewer that supports arrow keys, HEIC, WebP, foreign characters, long paths, and zip. Unlike IrfanView 64 4.54 and JPEGView 1.0.37.
 
 ```pre
 usage: tk_image_viewer [-h] [--fullscreen] [--geometry WxH+X+Y] [--quality N] [--resize [N]] [--slideshow [ms]] [--transpose N] [--update [ms]] [-v] [path]
@@ -14,7 +14,7 @@ options:
   --geometry WxH+X+Y, -g WxH+X+Y
                         set window geometry, eg -g +0+-999
   --quality N, -q N     set antialiasing level (0-5, default 0)
-  --resize [N], -r [N]  resize image to fit window (0-3: none, all, big, small. default 0)
+  --resize [N], -r [N]  resize image to fit window (0-3: none, all, big, small. default 1)
   --slideshow [ms], -s [ms]
                         switch to next image every N ms (default 4000)
   --transpose N, -t N   transpose 0-6 flip_left_right, flip_top_bottom, rotate_90, rotate_180, rotate_270, transpose, transverse

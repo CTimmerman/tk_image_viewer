@@ -3,7 +3,7 @@
 by Cees Timmerman
 2024-03-17 First version.
 2024-03-23 Save stuff.
-2024-03-24 Animated GIF support.
+2024-03-24 Zip and multiframe image animation support.
 """
 
 import enum
@@ -57,6 +57,7 @@ VERBOSITY_LEVELS = [
 ]
 VERBOSITY = logging.WARNING
 WINDOW_SIZE = ""
+ZIP_INDEX = 0
 paths: list[str] = []
 path_index: int = 0
 
@@ -93,23 +94,40 @@ def animation_toggle(event=None):
 @log_this
 def browse(event=None):
     """Go to next or previous file."""
-    global path_index
+    global path_index, ZIP_INDEX
+
+    new_index = path_index
+
+    if "Names" in INFO:
+        new_index = ZIP_INDEX
 
     k = event.keysym if event else "Next"
     if k == "1":
-        path_index = 0
+        new_index = 0
     elif k == "x":
-        path_index = randint(0, len(paths) - 1)
+        new_index = randint(0, len(paths) - 1)
     elif k in ("Left", "Up", "Button-4"):
-        path_index -= 1
+        new_index -= 1
     else:
-        path_index += 1
+        new_index += 1
 
-    if path_index < 0:
-        path_index = len(paths) - 1
-    if path_index >= len(paths):
-        path_index = 0
+    if "Names" in INFO:
+        if new_index < 0:
+            new_index = path_index - 1
+        elif new_index >= len(INFO["Names"]):
+            new_index = path_index + 1
+        else:
+            ZIP_INDEX = new_index
+            image_load()
+            return
 
+    if new_index < 0:
+        new_index = len(paths) - 1
+    if new_index >= len(paths):
+        new_index = 0
+
+    path_index = new_index
+    ZIP_INDEX = 0
     image_load()
 
 
@@ -189,16 +207,23 @@ def image_load(path=None):
         if path.suffix == ".zip":
             with zipfile.ZipFile(path, "r") as zf:
                 names = zf.namelist()
+                INFO["Names"] = names
                 # imgdata = archive.open('img_01.png')
                 # IMAGE = io.BytesIO(imgdata)
-                IMAGE = Image.open(zf.open(names[0]))
+                log.debug("Loading name index %s", ZIP_INDEX)
+                IMAGE = Image.open(zf.open(names[ZIP_INDEX]))
         else:
             IMAGE = Image.open(path)
         log.debug("Cached %s PIL_IMAGE", IMAGE.size)
         if hasattr(IMAGE, "n_frames"):
             INFO["Frames"] = IMAGE.n_frames
         INFO.update(**IMAGE.info)
-        log.debug("info: %s", INFO)
+        for k, v in INFO.items():
+            log.debug(
+                "%s: %s",
+                k,
+                str(v)[:80] + "..." if len(str(v)) > 80 else v,
+            )
         im_resize(ANIMATION_ON)
     except (
         tkinter.TclError,
@@ -309,7 +334,12 @@ def im_show(im):
         SCALE = max(SCALE_MIN, min(SCALE * 0.9, SCALE_MAX))
         return
 
-    msg = f"{path_index+1}/{len(paths)} {'%sx%s' % IMAGE.size} @ {'%sx%s' % im.size} {paths[path_index]}"
+    zip_info = (
+        f" {ZIP_INDEX + 1}/{len(INFO['Names'])} {INFO['Names'][ZIP_INDEX]}"
+        if "Names" in INFO
+        else ""
+    )
+    msg = f"{path_index+1}/{len(paths)}{zip_info} {'%sx%s' % IMAGE.size} @ {'%sx%s' % im.size} {paths[path_index]}"
     root.title(msg + " - " + TITLE)
     INFO_OVERLAY.configure(text=msg + "\n" + info_get())
 
@@ -317,7 +347,7 @@ def im_show(im):
 def info_get() -> str:
     """Get image info."""
     msg = "\n".join(
-        f"{k}: {(str(v)[:80] + '...') if isinstance(v, bytes) and len(v) > 80 else v}"
+        f"{k}: {(str(v)[:80] + '...') if len(str(v)) > 80 else v}"
         for k, v in INFO.items()
     )
     if not IMAGE:
@@ -384,6 +414,8 @@ def set_supported_files():
     """Set supported files. TODO: Distinguish between openable and saveable."""
     global SUPPORTED_FILES
     exts = Image.registered_extensions()
+    exts[".zip"] = "ZIP"
+
     type_exts = {}
     for k, v in exts.items():
         type_exts.setdefault(v, []).append(k)
@@ -391,6 +423,7 @@ def set_supported_files():
     SUPPORTED_FILES = [
         ("All supported files", " ".join(sorted(list(exts)))),
         ("All files", "*"),
+        ("Archives", "*.zip"),
         *sorted(type_exts.items()),
     ]
 
@@ -409,18 +442,30 @@ def path_open(event=None):
 @log_this
 def path_save(event=None):
     """Save a file using the filepicker."""
-    path = paths[path_index]
-    p = pathlib.Path(path)
+    if "Names" in INFO:
+        p = pathlib.Path(str(paths[path_index]) + "." + INFO["Names"][ZIP_INDEX])
+    else:
+        p = paths[path_index]
+
+    print("Image info to be saved:", IMAGE.info)
     filename = filedialog.asksaveasfilename(
         initialfile=p.absolute(), defaultextension=p.suffix, filetypes=SUPPORTED_FILES
     )
     if filename:
         log.info("Saving %s", filename)
         try:
-            IMAGE.save(filename)
+            IMAGE.save(
+                filename,
+                # dpi=INFO.get("dpi", b""),
+                # exif=INFO.get("exif", b""),
+                # icc_profile=INFO.get("icc_profile", b""),
+                **IMAGE.info,
+                optimize=True,
+                #save_all=True,
+            )
             paths_update()
             toast(f"Saved {filename}")
-        except (IOError, ValueError) as ex:
+        except (IOError, TypeError, ValueError) as ex:
             msg = f"Failed to save as {filename}. {ex}"
             log.error(msg)
             toast(msg)
@@ -771,7 +816,7 @@ if __name__ == "__main__":
         "-r",
         metavar="N",
         nargs="?",
-        help="resize image to fit window (0-3: none, all, big, small. default 0)",
+        help="resize image to fit window (0-3: none, all, big, small. default 1)",
         const=1,
         type=lambda s: int(s) if 0 <= int(s) <= 3 else 0,
     )
