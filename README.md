@@ -1,6 +1,6 @@
 # Tk Image Viewer
 
-An image viewer that supports arrow keys, HEIC, WebP, foreign characters, long paths, and zip. Unlike IrfanView 64 4.54 and JPEGView 1.0.37.
+An image viewer that supports arrow keys, HEIC, WebP, foreign characters, long paths, and zip. Unlike IrfanView 64 4.54, JPEGView 1.0.37, and SumatraPDF v3.5.2 64-bit.
 
 ```pre
 usage: tk_image_viewer [-h] [--fullscreen] [--geometry WxH+X+Y] [--quality N] [--resize [N]] [--slideshow [ms]] [--transpose N] [--update [ms]] [-v] [path]
