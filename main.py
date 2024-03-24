@@ -1,4 +1,4 @@
-# pylint: disable=consider-using-f-string, global-statement, unused-argument
+# pylint: disable=consider-using-f-string, global-statement, too-many-boolean-expressions, unused-argument
 """Tk Image Viewer
 by Cees Timmerman
 2024-03-17 First version.
