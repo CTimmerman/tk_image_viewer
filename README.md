@@ -36,7 +36,9 @@ s - Save a file using the filepicker.
 F5 u - Refresh path info.
 b c - Set background color.
 Control-MouseWheel minus plus equal - Zoom.
+Alt-MouseWheel Alt-minus Alt-plus Alt-equal - Zoom text of overlays.
 r - Change type of window fitting.
+a - Toggle animation.
 Pause - Toggle slideshow.
 t - Increment transpose.
 T - Decrement transpose.

@@ -15,6 +15,7 @@ from random import randint
 import time
 import tkinter
 from tkinter import filedialog, messagebox
+import zipfile
 
 from PIL import ExifTags, Image, ImageTk, IptcImagePlugin, TiffTags
 from PIL.Image import Transpose
@@ -30,9 +31,11 @@ class Fits(enum.IntEnum):
     SMALL = 3
 
 
+ANIMATION_ON = True
 BG_COLORS = ["black", "gray10", "gray50", "white"]
 BG_INDEX = -1
 FIT = 0
+FONT_SIZE = 14
 IMAGE: Image.Image | None = None
 IM_FRAME = 0
 INFO: dict = {}
@@ -41,6 +44,7 @@ REFRESH_INTERVAL = 0
 SCALE = 1.0
 SCALE_MIN = 0.001
 SCALE_MAX = 40.0
+SCALE_TEXT = 1.0
 SHOW_INFO = False
 TITLE = __doc__.split("\n")[0]
 TRANSPOSE_INDEX = -1
@@ -73,6 +77,17 @@ def log_this(func):
         return func(*args, **kwargs)
 
     return inner
+
+
+def animation_toggle(event=None):
+    """Toggle animation."""
+    global ANIMATION_ON
+    ANIMATION_ON = not ANIMATION_ON
+    if ANIMATION_ON:
+        toast("Starting animation.")
+        im_resize(ANIMATION_ON)
+    else:
+        toast("Stopping animation.")
 
 
 @log_this
@@ -171,13 +186,20 @@ def image_load(path=None):
                 ),
             ),
         }
-        IMAGE = Image.open(path)
+        if path.suffix == ".zip":
+            with zipfile.ZipFile(path, "r") as zf:
+                names = zf.namelist()
+                # imgdata = archive.open('img_01.png')
+                # IMAGE = io.BytesIO(imgdata)
+                IMAGE = Image.open(zf.open(names[0]))
+        else:
+            IMAGE = Image.open(path)
         log.debug("Cached %s PIL_IMAGE", IMAGE.size)
         if hasattr(IMAGE, "n_frames"):
             INFO["Frames"] = IMAGE.n_frames
         INFO.update(**IMAGE.info)
         log.debug("info: %s", INFO)
-        im_resize()
+        im_resize(ANIMATION_ON)
     except (
         tkinter.TclError,
         IOError,
@@ -243,7 +265,7 @@ def im_scale(im):
     return im
 
 
-def im_resize():
+def im_resize(loop=False):
     """Resize image."""
     global IM_FRAME
     if not IMAGE:
@@ -263,7 +285,7 @@ def im_resize():
 
     im_show(im)
 
-    if hasattr(IMAGE, "n_frames") and IMAGE.n_frames > 1:
+    if loop and hasattr(IMAGE, "n_frames") and IMAGE.n_frames > 1:
         IM_FRAME = (IM_FRAME + 1) % IMAGE.n_frames
         try:
             IMAGE.seek(IM_FRAME)
@@ -271,7 +293,7 @@ def im_resize():
             log.error("IMAGE EOF. %s", ex)
         duration = INFO["duration"] if "duration" in INFO else 100
         log.debug("Duration %s", duration)
-        root.after(duration, im_resize)
+        root.after(duration, im_resize, ANIMATION_ON)
 
 
 @log_this
@@ -279,7 +301,6 @@ def im_show(im):
     """Show PIL image in Tk image widget."""
     global SCALE
     try:
-        log.debug("Showing tkim")
         tkim = ImageTk.PhotoImage(im)  # , format=fmt)
         IMAGE_WIDGET.config(image=tkim, text="")  # Set it.
         IMAGE_WIDGET.tkim = tkim  # Keep it. Why isn't this built in?!
@@ -295,7 +316,10 @@ def im_show(im):
 
 def info_get() -> str:
     """Get image info."""
-    msg = "\n".join(f"{k}: {(str(v)[:80] + '...') if isinstance(v, bytes) and len(v) > 80 else v}" for k, v in INFO.items())
+    msg = "\n".join(
+        f"{k}: {(str(v)[:80] + '...') if isinstance(v, bytes) and len(v) > 80 else v}"
+        for k, v in INFO.items()
+    )
     if not IMAGE:
         return msg
 
@@ -559,9 +583,9 @@ def zoom(event):
     """Zoom."""
     global SCALE
     k = event.keysym if event else "plus"
-    if event.num == 5 or event.delta == -120:
+    if event.num == 5 or event.delta < 0:
         k = "plus"
-    if event.num == 4 or event.delta == 120:
+    if event.num == 4 or event.delta > 0:
         k = "minus"
     if k == "plus":
         SCALE *= 1.1
@@ -571,6 +595,32 @@ def zoom(event):
         SCALE = 1
     SCALE = max(SCALE_MIN, min(SCALE, SCALE_MAX))
     im_resize()
+
+
+@log_this
+def zoom_text(event):
+    """Zoom text of overlays."""
+    global SCALE_TEXT
+    k = event.keysym if event else "plus"
+    if event.num == 5 or event.delta < 0:
+        k = "plus"
+    if event.num == 4 or event.delta > 0:
+        k = "minus"
+    if k == "plus":
+        SCALE_TEXT *= 1.1
+    elif k == "minus":
+        SCALE_TEXT *= 0.9
+    else:
+        SCALE_TEXT = 1
+    SCALE_TEXT = max(0.1, min(SCALE_TEXT, 20))
+    new_font_size = int(FONT_SIZE * SCALE_TEXT)
+    new_font_size = max(1, min(new_font_size, 200))
+
+    log.info("Text scale: %s New font size: %s", SCALE_TEXT, new_font_size)
+
+    IMAGE_WIDGET.config(font=("Consolas", new_font_size))
+    INFO_OVERLAY.config(font=("Consolas", new_font_size))
+    STATUS_OVERLAY.config(font=("Consolas", new_font_size * 2))
 
 
 root = tkinter.Tk()
@@ -583,8 +633,8 @@ SLIDESHOW_PAUSE = 4000
 STATUS_OVERLAY = tkinter.Label(
     root,
     text="status",
-    font=("Consolas", 24),
-    fg="yellow",
+    font=("Consolas", FONT_SIZE * 2),
+    fg="#00FF00",
     bg="black",
     wraplength=screen_w,
     anchor="center",
@@ -594,7 +644,7 @@ STATUS_OVERLAY.place(x=0, y=0)
 INFO_OVERLAY = tkinter.Label(
     root,
     text="status",
-    font=("Consolas", 14),
+    font=("Consolas", FONT_SIZE),
     fg="yellow",
     bg="black",
     wraplength=screen_w,
@@ -606,6 +656,7 @@ IMAGE_WIDGET = tkinter.Label(
     root,
     compound="center",
     fg="red",
+    font=("Consolas", FONT_SIZE),
     width=screen_w,
     height=screen_h,
     wraplength=int(screen_w / 2),
@@ -627,7 +678,9 @@ binds = [
     (paths_update, "F5 u"),
     (set_bg, "b c"),
     (zoom, "Control-MouseWheel minus plus equal"),
+    (zoom_text, "Alt-MouseWheel Alt-minus Alt-plus Alt-equal"),
     (fit_handler, "r"),
+    (animation_toggle, "a"),
     (slideshow_toggle, "Pause"),
     (transpose_inc, "t"),
     (transpose_dec, "T"),
