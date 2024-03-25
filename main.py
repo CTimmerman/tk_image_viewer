@@ -163,7 +163,7 @@ def help_handler(event=None):
     SHOW_INFO = not SHOW_INFO
     if SHOW_INFO:
         msg = f"{TITLE}\nBinds:\n" + "\n".join(
-            f"{keys} - {fun.__doc__}" for fun, keys in binds if not "Configure" in keys
+            f"{keys} - {fun.__doc__}" for fun, keys in binds if "Configure" not in keys
         )
         log.debug(msg)
         INFO_OVERLAY.config(text=msg)
