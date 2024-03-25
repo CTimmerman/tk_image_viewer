@@ -469,10 +469,10 @@ def path_save(event=None):
             )
             paths_update()
             toast(f"Saved {filename}")
-        except (IOError, TypeError, ValueError) as ex:
+        except (IOError, KeyError, TypeError, ValueError) as ex:
             msg = f"Failed to save as {filename}. {ex}"
             log.error(msg)
-            toast(msg)
+            toast(msg, fg="red")
 
 
 @log_this
@@ -562,9 +562,9 @@ def slideshow_toggle(event=None):
         toast("Stopping slideshow.")
 
 
-def toast(msg: str, ms: int = 2000):
+def toast(msg: str, ms: int = 2000, fg="#00FF00"):
     """Temporarily show a status message."""
-    STATUS_OVERLAY.config(text=msg)
+    STATUS_OVERLAY.config(text=msg, fg=fg)
     STATUS_OVERLAY.lift()
     root.after(ms, STATUS_OVERLAY.lower)
 
