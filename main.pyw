@@ -4,9 +4,9 @@ by Cees Timmerman
 2024-03-17 First version.
 2024-03-23 Save stuff.
 2024-03-24 Zip and multiframe image animation support.
-2024-03-27 Set sort order.
+2024-03-27 Set sort order. Support EML, MHT, MHTML.
 """
-
+import base64
 import enum
 import functools
 import logging
@@ -16,6 +16,7 @@ import re
 import time
 import tkinter
 import zipfile
+from io import BytesIO
 from random import randint
 from tkinter import filedialog, messagebox
 
@@ -217,6 +218,32 @@ def image_load(path=None):
                 log.debug("Loading name index %s", ZIP_INDEX)
                 # pylint: disable=consider-using-with
                 IMAGE = Image.open(zf.open(names[ZIP_INDEX]))
+        elif path.suffix in (".eml", ".mht", ".mhtml"):
+            with open(path, "r", encoding="utf8") as f:
+                mhtml = f.read()
+            boundary = re.search('boundary="(.+)"', mhtml).group(1)
+            parts = mhtml.split(boundary)[1:-1]
+            INFO["Names"] = []
+            new_parts = []
+            for p in parts:
+                meta, data = p.split("\n\n", maxsplit=1)
+                m = meta.lower()
+                if "\ncontent-transfer-encoding: base64" not in m:
+                    continue
+                if "\ncontent-type:" in m and "\ncontent-type: image" not in m:
+                    continue
+                name = sorted(meta.strip().split('\n'))[0].split('/')[-1]
+                INFO["Names"].append(name)
+                new_parts.append(data)
+            data = new_parts[ZIP_INDEX]
+            try:
+                im_file = BytesIO(base64.standard_b64decode(data.rstrip()))
+                IMAGE = Image.open(im_file)
+            except ValueError as ex:
+                log.error("Failed to split mhtml: %s", ex)
+                log.error("DATA %r", data[:180])
+                im_file.seek(0)
+                log.error("DECODED %s", im_file.read()[:80])
         else:
             IMAGE = Image.open(path)
         log.debug("Cached %s PIL_IMAGE", IMAGE.size)
@@ -422,6 +449,9 @@ def set_supported_files():
     """Set supported files. TODO: Distinguish between openable and saveable."""
     global SUPPORTED_FILES
     exts = Image.registered_extensions()
+    exts[".eml"] = "EML"
+    exts[".mht"] = "MHT"
+    exts[".mhtml"] = "MHTML"
     exts[".zip"] = "ZIP"
 
     type_exts = {}
@@ -431,7 +461,7 @@ def set_supported_files():
     SUPPORTED_FILES = [
         ("All supported files", " ".join(sorted(list(exts)))),
         ("All files", "*"),
-        ("Archives", "*.zip"),
+        ("Archives", ".eml .mht .mhtml .zip"),
         *sorted(type_exts.items()),
     ]
 
@@ -501,7 +531,8 @@ def paths_update(event=None, path=None):
         if s == "natural":
             paths.sort(
                 key=lambda s: [
-                    int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", str(s))
+                    int(t) if t.isdigit() else t.lower()
+                    for t in re.split(r"(\d+)", str(s))
                 ]
             )
         elif s == "ctime":
