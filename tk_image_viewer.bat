@@ -1,3 +1,3 @@
 @echo off
-python "%~dp0\main.py" -r -vv %*
+python "%~dp0\main.pyw" -r -vv %*
 pause
