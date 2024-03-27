@@ -177,9 +177,69 @@ def help_handler(event=None):
         INFO_OVERLAY.lower()
 
 
+def set_stats(path):
+    """Set stats."""
+    global INFO
+    stats = os.stat(path)
+    log.debug("Stat: %s", stats)
+    INFO = {
+        # "Path": pathlib.Path(path),
+        "Size": f"{stats.st_size:,} B",
+        "Accessed": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stats.st_atime)),
+        "Modified": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stats.st_mtime)),
+        "Created": time.strftime(
+            "%Y-%m-%d %H:%M:%S",
+            time.localtime(
+                stats.st_birthtime if hasattr(stats, "st_birthtime") else stats.st_ctime
+            ),
+        ),
+    }
+
+
+def load_mhtml(path):
+    """Load EML/MHT/MHTML."""
+    global IMAGE
+    with open(path, "r", encoding="utf8") as f:
+        mhtml = f.read()
+    boundary = re.search('boundary="(.+)"', mhtml).group(1)
+    parts = mhtml.split(boundary)[1:-1]
+    INFO["Names"] = []
+    new_parts = []
+    for p in parts:
+        meta, data = p.split("\n\n", maxsplit=1)
+        m = meta.lower()
+        if "\ncontent-transfer-encoding: base64" not in m:
+            continue
+        if "\ncontent-type:" in m and "\ncontent-type: image" not in m:
+            continue
+        name = sorted(meta.strip().split("\n"))[0].split("/")[-1]
+        INFO["Names"].append(name)
+        new_parts.append(data)
+    data = new_parts[ZIP_INDEX]
+    try:
+        im_file = BytesIO(base64.standard_b64decode(data.rstrip()))
+        IMAGE = Image.open(im_file)
+    except ValueError as ex:
+        log.error("Failed to split mhtml: %s", ex)
+        log.error("DATA %r", data[:180])
+        im_file.seek(0)
+        log.error("DECODED %s", im_file.read()[:80])
+
+
+def load_zip(path):
+    """Load a zip file."""
+    global IMAGE
+    with zipfile.ZipFile(path, "r") as zf:
+        names = zf.namelist()
+        INFO["Names"] = names
+        log.debug("Loading name index %s", ZIP_INDEX)
+        # pylint: disable=consider-using-with
+        IMAGE = Image.open(zf.open(names[ZIP_INDEX]))
+
+
 def image_load(path=None):
     """Load image."""
-    global IMAGE, INFO
+    global IMAGE
 
     if not path:
         path = paths[path_index]
@@ -189,61 +249,11 @@ def image_load(path=None):
 
     err_msg = ""
     try:
-        stats = os.stat(path)
-        log.debug("Stat: %s", stats)
-        INFO = {
-            # "Path": pathlib.Path(path),
-            "Size": f"{stats.st_size:,} B",
-            "Accessed": time.strftime(
-                "%Y-%m-%d %H:%M:%S", time.localtime(stats.st_atime)
-            ),
-            "Modified": time.strftime(
-                "%Y-%m-%d %H:%M:%S", time.localtime(stats.st_mtime)
-            ),
-            "Created": time.strftime(
-                "%Y-%m-%d %H:%M:%S",
-                time.localtime(
-                    stats.st_birthtime
-                    if hasattr(stats, "st_birthtime")
-                    else stats.st_ctime
-                ),
-            ),
-        }
+        set_stats(path)
         if path.suffix == ".zip":
-            with zipfile.ZipFile(path, "r") as zf:
-                names = zf.namelist()
-                INFO["Names"] = names
-                # imgdata = archive.open('img_01.png')
-                # IMAGE = io.BytesIO(imgdata)
-                log.debug("Loading name index %s", ZIP_INDEX)
-                # pylint: disable=consider-using-with
-                IMAGE = Image.open(zf.open(names[ZIP_INDEX]))
+            load_zip(path)
         elif path.suffix in (".eml", ".mht", ".mhtml"):
-            with open(path, "r", encoding="utf8") as f:
-                mhtml = f.read()
-            boundary = re.search('boundary="(.+)"', mhtml).group(1)
-            parts = mhtml.split(boundary)[1:-1]
-            INFO["Names"] = []
-            new_parts = []
-            for p in parts:
-                meta, data = p.split("\n\n", maxsplit=1)
-                m = meta.lower()
-                if "\ncontent-transfer-encoding: base64" not in m:
-                    continue
-                if "\ncontent-type:" in m and "\ncontent-type: image" not in m:
-                    continue
-                name = sorted(meta.strip().split('\n'))[0].split('/')[-1]
-                INFO["Names"].append(name)
-                new_parts.append(data)
-            data = new_parts[ZIP_INDEX]
-            try:
-                im_file = BytesIO(base64.standard_b64decode(data.rstrip()))
-                IMAGE = Image.open(im_file)
-            except ValueError as ex:
-                log.error("Failed to split mhtml: %s", ex)
-                log.error("DATA %r", data[:180])
-                im_file.seek(0)
-                log.error("DECODED %s", im_file.read()[:80])
+            load_mhtml(path)
         else:
             IMAGE = Image.open(path)
         log.debug("Cached %s PIL_IMAGE", IMAGE.size)
