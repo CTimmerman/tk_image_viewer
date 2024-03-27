@@ -441,7 +441,7 @@ set_supported_files()
 
 @log_this
 def path_open(event=None):
-    """Open a file using the filepicker."""
+    """Pick a file to open."""
     filename = filedialog.askopenfilename(filetypes=SUPPORTED_FILES)
     if filename:
         paths_update(None, filename)
@@ -449,7 +449,7 @@ def path_open(event=None):
 
 @log_this
 def path_save(event=None):
-    """Save a file using the filepicker."""
+    """Save file as."""
     if "Names" in INFO:
         p = pathlib.Path(str(paths[path_index]) + "." + INFO["Names"][ZIP_INDEX])
     else:
@@ -631,7 +631,7 @@ def transpose_dec(event=None):
 
 @log_this
 def fit_handler(event):
-    """Change type of window fitting."""
+    """Resize type to fit window."""
     global FIT
     FIT = (FIT + 1) % len(Fits)
     toast(Fits(FIT))
@@ -758,22 +758,22 @@ binds = [
     (fullscreen_toggle, "F11 Return f"),
     (browse, "Left Right Up Down Key-1 x"),
     (mouse_handler, "MouseWheel Button-4 Button-5"),
-    (path_open, "o"),
+    (path_open, "p"),
     (path_save, "s"),
+    (delete_file, "Delete"),
     (paths_update, "F5 u"),
+    (set_order, "o"),
     (set_bg, "b c"),
     (zoom, "Control-MouseWheel minus plus equal"),
     (zoom_text, "Alt-MouseWheel Alt-minus Alt-plus Alt-equal"),
     (fit_handler, "r"),
     (animation_toggle, "a"),
-    (set_order, "o"),
     (slideshow_toggle, "Pause"),
     (transpose_inc, "t"),
     (transpose_dec, "T"),
-    (set_verbosity, "v"),
     (info_toggle, "i"),
+    (set_verbosity, "v"),
     (resize_handler, "Configure"),
-    (delete_file, "Delete"),
 ]
 
 
