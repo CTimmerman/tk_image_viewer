@@ -4,6 +4,7 @@ by Cees Timmerman
 2024-03-17 First version.
 2024-03-23 Save stuff.
 2024-03-24 Zip and multiframe image animation support.
+2024-03-27 Set sort order.
 """
 
 import enum
@@ -11,11 +12,12 @@ import functools
 import logging
 import os
 import pathlib
-from random import randint
+import re
 import time
 import tkinter
-from tkinter import filedialog, messagebox
 import zipfile
+from random import randint
+from tkinter import filedialog, messagebox
 
 from PIL import ExifTags, Image, ImageTk, IptcImagePlugin, TiffTags
 from PIL.Image import Transpose
@@ -46,6 +48,8 @@ SCALE_MIN = 0.001
 SCALE_MAX = 40.0
 SCALE_TEXT = 1.0
 SHOW_INFO = False
+SORTS = "natural string ctime mtime size".split()
+SORT = "natural"
 TITLE = __doc__.split("\n", 1)[0]
 TRANSPOSE_INDEX = -1
 VERBOSITY_LEVELS = [
@@ -254,7 +258,7 @@ def get_fit_ratio():
     if (
         ((FIT == Fits.ALL) and (im_w != w or im_h != h))
         or ((FIT == Fits.BIG) and (im_w > w or im_h > h))
-        or ((FIT == Fits.SMALL) and (im_w < w or im_h < h))
+        or ((FIT == Fits.SMALL) and (im_w < w and im_h < h))
     ):
         ratio = min(w / im_w, h / im_h)
     return ratio
@@ -490,6 +494,25 @@ def paths_update(event=None, path=None):
     paths = list(p.glob("*"))
     log.debug("Found %s files.", len(paths))
 
+    log.debug("Filter?")
+    log.debug("Sorting %s", SORT)
+
+    for s in SORT.split(","):
+        if s == "natural":
+            paths.sort(
+                key=lambda s: [
+                    int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", str(s))
+                ]
+            )
+        elif s == "ctime":
+            paths.sort(key=os.path.getmtime)
+        elif s == "mtime":
+            paths.sort(key=os.path.getmtime)
+        elif s == "size":
+            paths.sort(key=os.path.getsize)
+        elif s == "string":
+            paths.sort()
+
     try:
         path_index = paths.index(pathlib.Path(path))
     except ValueError as ex:
@@ -533,6 +556,18 @@ def set_bg(event=None):
 
 
 @log_this
+def set_order(event=None):
+    """Set order."""
+    global SORT
+    i = SORTS.index(SORT) if SORT in SORTS else "natural"
+    i = (i + 1) % len(SORTS)
+    SORT = SORTS[i]
+    log.info("Sort %s", SORT)
+    toast("Sort: " + SORT)
+    paths_update()
+
+
+@log_this
 def set_verbosity(event=None):
     """Set verbosity."""
     global VERBOSITY
@@ -540,8 +575,9 @@ def set_verbosity(event=None):
     if VERBOSITY < 10:
         VERBOSITY = logging.CRITICAL
 
+    logging.basicConfig(level=VERBOSITY)  # Show up in nested shells in Windows 11.
     log.setLevel(VERBOSITY)
-    print("Log level %s" % logging.getLevelName(VERBOSITY))
+    # print("Log level %s" % logging.getLevelName(VERBOSITY))
 
 
 def slideshow_run(event=None):
@@ -730,6 +766,7 @@ binds = [
     (zoom_text, "Alt-MouseWheel Alt-minus Alt-plus Alt-equal"),
     (fit_handler, "r"),
     (animation_toggle, "a"),
+    (set_order, "o"),
     (slideshow_toggle, "Pause"),
     (transpose_inc, "t"),
     (transpose_dec, "T"),
@@ -742,7 +779,7 @@ binds = [
 
 def main(args):
     """Main function."""
-    global FIT, QUALITY, REFRESH_INTERVAL, SLIDESHOW_PAUSE, TRANSPOSE_INDEX, VERBOSITY
+    global FIT, QUALITY, REFRESH_INTERVAL, SLIDESHOW_PAUSE, SORT, TRANSPOSE_INDEX, VERBOSITY
 
     if args.verbose:
         VERBOSITY = VERBOSITY_LEVELS[min(len(VERBOSITY_LEVELS) - 1, 1 + args.verbose)]
@@ -769,6 +806,9 @@ def main(args):
 
     if args.geometry:
         root.geometry(args.geometry)
+
+    if args.order:
+        SORT = args.order
 
     if args.update:
         REFRESH_INTERVAL = args.update
@@ -805,6 +845,14 @@ if __name__ == "__main__":
         "-g",
         metavar="WxH+X+Y",
         help="set window geometry, eg -g +0+-999",
+        type=str,
+    )
+    parser.add_argument(
+        "--order",
+        "-o",
+        metavar="[natural (default)|string|random|mtime|ctime|size]",
+        help="sort order",
+        default="natural",
         type=str,
     )
     parser.add_argument(
