@@ -3,24 +3,24 @@
 An image viewer that supports arrow keys, HEIC, WebP, foreign characters, long paths, and zip. Unlike IrfanView 64 4.54, JPEGView 1.0.37, and SumatraPDF v3.5.2 64-bit.
 
 ```pre
-usage: tk_image_viewer [-h] [--fullscreen] [--geometry WxH+X+Y] [--order [natural default|string|random|mtime|ctime|size]] [--quality N] [--resize [N]] [--slideshow [ms]] [--transpose N] [--update [ms]] [-v] [path]
+usage: tk_image_viewer [-h] [-f] [-g WxH+X+Y] [-o [natural|string|random|mtime|ctime|size]] [-q N] [-r [N]] [-s [ms]] [-t N] [-u [ms]] [-v] [path]
 
 positional arguments:
   path
 
 options:
   -h, --help            show this help message and exit
-  --fullscreen, -f      run fullscreen
-  --geometry WxH+X+Y, -g WxH+X+Y
+  -f, --fullscreen      run fullscreen
+  -g WxH+X+Y, --geometry WxH+X+Y
                         set window geometry, eg -g +0+-999
-  --order [natural (default)|string|random|mtime|ctime|size], -o [natural (default)|string|random|mtime|ctime|size]
-                        sort order
-  --quality N, -q N     set antialiasing level (0-5, default 0)
-  --resize [N], -r [N]  resize image to fit window (0-3: none, all, big, small. default 1)
-  --slideshow [ms], -s [ms]
+  -o [natural|string|random|mtime|ctime|size], --order [natural|string|random|mtime|ctime|size]
+                        sort order. default natural
+  -q N, --quality N     set antialiasing level (0-5, default 0)
+  -r [N], --resize [N]  resize image to fit window (0-3: none, all, big, small. default 1)
+  -s [ms], --slideshow [ms]
                         switch to next image every N ms (default 4000)
-  --transpose N, -t N   transpose 0-6 flip_left_right, flip_top_bottom, rotate_90, rotate_180, rotate_270, transpose, transverse
-  --update [ms], -u [ms]
+  -t N, --transpose N   transpose 0-6 flip_left_right, flip_top_bottom, rotate_90, rotate_180, rotate_270, transpose, transverse
+  -u [ms], --update [ms]
                         update interval (default 4000)
   -v, --verbose         set log level
 ```
@@ -47,5 +47,7 @@ Pause - Toggle slideshow.
 t - Increment transpose.
 T - Decrement transpose.
 i - Toggle info overlay.
+Control-c - Copy info to clipboard.
+Control-v - Paste image from clipboard.
 v - Set verbosity.
 ```

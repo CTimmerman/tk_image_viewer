@@ -5,6 +5,7 @@ by Cees Timmerman
 2024-03-23 Save stuff.
 2024-03-24 Zip and multiframe image animation support.
 2024-03-27 Set sort order. Support EML, MHT, MHTML.
+2024-03-30 Copy info + paste picture.
 """
 import base64
 import enum
@@ -20,7 +21,7 @@ from io import BytesIO
 from random import randint
 from tkinter import filedialog, messagebox
 
-from PIL import ExifTags, Image, ImageTk, IptcImagePlugin, TiffTags
+from PIL import ExifTags, Image, ImageGrab, ImageTk, IptcImagePlugin, TiffTags
 from PIL.Image import Transpose
 from pillow_heif import register_heif_opener  # type: ignore
 
@@ -137,6 +138,29 @@ def browse(event=None):
 
 
 @log_this
+def clipboard_copy(event):
+    """Copy info to clipboard."""
+    root.clipboard_clear()
+    root.clipboard_append(
+        "{}\n{}".format(root.title(), "\n".join(f"{k}: {v}" for k, v in INFO.items()))
+    )
+
+
+@log_this
+def clipboard_paste(event):
+    """Paste image from clipboard."""
+    global IMAGE, INFO, path_index, paths
+    im = ImageGrab.grabclipboard()
+    if not im:
+        return
+    IMAGE = im
+    INFO = {"Pasted": time.ctime()}
+    path_index = 0
+    paths = ["pasted"]
+    im_resize(IMAGE)
+
+
+@log_this
 def close(event=None):
     """Close fullscreen or app."""
     if root.overrideredirect():
@@ -244,18 +268,19 @@ def image_load(path=None):
     if not path:
         path = paths[path_index]
 
-    msg = f"{path_index+1}/{len(paths)} "
-    log.debug("Loading %s%s", msg, path)
+    msg = f"{path_index+1}/{len(paths)}"
+    log.debug("Loading %s %s", msg, path)
 
     err_msg = ""
     try:
-        set_stats(path)
-        if path.suffix == ".zip":
-            load_zip(path)
-        elif path.suffix in (".eml", ".mht", ".mhtml"):
-            load_mhtml(path)
-        else:
-            IMAGE = Image.open(path)
+        if path != "pasted":
+            set_stats(path)
+            if path.suffix == ".zip":
+                load_zip(path)
+            elif path.suffix in (".eml", ".mht", ".mhtml"):
+                load_mhtml(path)
+            else:
+                IMAGE = Image.open(path)
         log.debug("Cached %s PIL_IMAGE", IMAGE.size)
         if hasattr(IMAGE, "n_frames"):
             INFO["Frames"] = IMAGE.n_frames
@@ -813,6 +838,8 @@ binds = [
     (transpose_inc, "t"),
     (transpose_dec, "T"),
     (info_toggle, "i"),
+    (clipboard_copy, "Control-c"),
+    (clipboard_paste, "Control-v"),
     (set_verbosity, "v"),
     (resize_handler, "Configure"),
 ]
@@ -876,37 +903,37 @@ if __name__ == "__main__":
     )
     parser.add_argument("path", default=os.getcwd(), nargs="?")
     parser.add_argument(
-        "--fullscreen",
         "-f",
+        "--fullscreen",
         action="store_true",
         help="run fullscreen",
     )
     parser.add_argument(
-        "--geometry",
         "-g",
+        "--geometry",
         metavar="WxH+X+Y",
         help="set window geometry, eg -g +0+-999",
         type=str,
     )
     parser.add_argument(
-        "--order",
         "-o",
-        metavar="[natural (default)|string|random|mtime|ctime|size]",
-        help="sort order",
+        "--order",
+        metavar="[natural|string|random|mtime|ctime|size]",
+        help="sort order. default natural",
         default="natural",
         type=str,
     )
     parser.add_argument(
-        "--quality",
         "-q",
+        "--quality",
         metavar="N",
         help="set antialiasing level (0-5, default 0)",
         default=0,
         type=int,
     )
     parser.add_argument(
-        "--resize",
         "-r",
+        "--resize",
         metavar="N",
         nargs="?",
         help="resize image to fit window (0-3: none, all, big, small. default 1)",
@@ -914,8 +941,8 @@ if __name__ == "__main__":
         type=lambda s: int(s) if 0 <= int(s) <= 3 else 0,
     )
     parser.add_argument(
-        "--slideshow",
         "-s",
+        "--slideshow",
         metavar="ms",
         nargs="?",
         help="switch to next image every N ms (default 4000)",
@@ -923,16 +950,16 @@ if __name__ == "__main__":
         type=int,
     )
     parser.add_argument(
-        "--transpose",
         "-t",
+        "--transpose",
         metavar="N",
         help=f"transpose 0-{len(Transpose)-1} {', '.join(x.name.lower() for x in Transpose)}",
         default=-1,
         type=int,
     )
     parser.add_argument(
-        "--update",
         "-u",
+        "--update",
         metavar="ms",
         nargs="?",
         help="update interval (default 4000)",
