@@ -13,12 +13,12 @@ import functools
 import logging
 import os
 import pathlib
+import random
 import re
 import time
 import tkinter
 import zipfile
 from io import BytesIO
-from random import randint
 from tkinter import filedialog, messagebox
 
 from PIL import ExifTags, Image, ImageGrab, ImageTk, IptcImagePlugin, TiffTags
@@ -111,7 +111,7 @@ def browse(event=None):
     if k == "1":
         new_index = 0
     elif k == "x":
-        new_index = randint(0, len(paths) - 1)
+        new_index = random.randint(0, len(paths) - 1)
     elif k in ("Left", "Up", "Button-4"):
         new_index -= 1
     else:
@@ -572,6 +572,8 @@ def paths_sort():
             paths.sort(key=os.path.getmtime)
         elif s == "mtime":
             paths.sort(key=os.path.getmtime)
+        elif s == "random":
+            random.shuffle(paths)
         elif s == "size":
             paths.sort(key=os.path.getsize)
         elif s == "string":
