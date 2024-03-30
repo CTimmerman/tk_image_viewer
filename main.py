@@ -5,7 +5,7 @@ by Cees Timmerman
 2024-03-23 Save stuff.
 2024-03-24 Zip and multiframe image animation support.
 2024-03-27 Set sort order. Support EML, MHT, MHTML.
-2024-03-30 Copy info + paste picture.
+2024-03-30 Copy info + paste picture(s)/paths.
 """
 import base64
 import enum
@@ -151,7 +151,19 @@ def clipboard_paste(event):
     """Paste image from clipboard."""
     global IMAGE, INFO, path_index, paths
     im = ImageGrab.grabclipboard()
+    log.debug("Pasted %r", im)
     if not im:
+        im = root.clipboard_get()
+        log.debug("Tk pasted %r", im)
+        if not im:
+            return
+    if isinstance(im, str):
+        im = [line.strip('"') for line in im.split("\n")]
+    if isinstance(im, list):
+        paths = [pathlib.Path(s) for s in im]
+        log.debug("Set paths to %s", paths)
+        path_index = 0
+        image_load()
         return
     IMAGE = im
     INFO = {"Pasted": time.ctime()}
@@ -544,22 +556,8 @@ def path_save(event=None):
             toast(msg, fg="red")
 
 
-@log_this
-def paths_update(event=None, path=None):
-    """Refresh path info."""
-    global paths, path_index
-    if not path:
-        path = paths[path_index]
-
-    p = pathlib.Path(path)
-    if not p.is_dir():
-        p = p.parent
-
-    log.debug("Reading %s...", p)
-    paths = list(p.glob("*"))
-    log.debug("Found %s files.", len(paths))
-
-    log.debug("Filter?")
+def paths_sort():
+    """Sort paths."""
     log.debug("Sorting %s", SORT)
 
     for s in SORT.split(","):
@@ -578,6 +576,25 @@ def paths_update(event=None, path=None):
             paths.sort(key=os.path.getsize)
         elif s == "string":
             paths.sort()
+
+
+@log_this
+def paths_update(event=None, path=None):
+    """Refresh path info."""
+    global paths, path_index
+    if not path:
+        path = paths[path_index]
+
+    p = pathlib.Path(path)
+    if not p.is_dir():
+        p = p.parent
+
+    log.debug("Reading %s...", p)
+    paths = list(p.glob("*"))
+    log.debug("Found %s files.", len(paths))
+
+    log.debug("Filter?")
+    paths_sort()
 
     try:
         path_index = paths.index(pathlib.Path(path))
@@ -630,7 +647,7 @@ def set_order(event=None):
     SORT = SORTS[i]
     log.info("Sort %s", SORT)
     toast("Sort: " + SORT)
-    paths_update()
+    paths_sort()
 
 
 @log_this
@@ -918,8 +935,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-o",
         "--order",
-        metavar="[natural|string|random|mtime|ctime|size]",
-        help="sort order. default natural",
+        help="sort order. [NATURAL|string|random|mtime|ctime|size]",
         default="natural",
         type=str,
     )
