@@ -1,4 +1,4 @@
-# pylint: disable=consider-using-f-string, global-statement, multiple-imports, too-many-boolean-expressions, unused-argument
+# pylint: disable=consider-using-f-string, global-statement, multiple-imports, too-many-boolean-expressions, too-many-lines, unused-argument
 """Tk Image Viewer
 by Cees Timmerman
 2024-03-17 First version.
@@ -562,9 +562,17 @@ def path_save(event=None):
             toast(msg, fg="red")
 
 
-def paths_sort():
+def paths_sort(path=None):
     """Sort paths."""
+    global path_index
     log.debug("Sorting %s", SORT)
+    if path:
+        try:
+            path_index = paths.index(pathlib.Path(path))
+        except ValueError:
+            pass
+    else:
+        path = paths[path_index]
     for s in SORT.split(","):
         if s == "natural":
             paths.sort(
@@ -584,31 +592,30 @@ def paths_sort():
         elif s == "string":
             paths.sort()
 
+    try:
+        log.debug("old index %s", path_index)
+        path_index = paths.index(pathlib.Path(path))
+        log.debug("new index %s", path_index)
+    except ValueError as ex:
+        log.error("update_index %s", ex)
+    image_load()
+
 
 @log_this
 def paths_update(event=None, path=None):
     """Refresh path info."""
-    global paths, path_index
+    global paths
     if not path:
         path = paths[path_index]
 
     p = pathlib.Path(path)
     if not p.is_dir():
         p = p.parent
-
     log.debug("Reading %s...", p)
     paths = list(p.glob("*"))
     log.debug("Found %s files.", len(paths))
-
     log.debug("Filter?")
-    paths_sort()
-
-    try:
-        path_index = paths.index(pathlib.Path(path))
-    except ValueError as ex:
-        log.error("paths_update %s", ex)
-
-    image_load()
+    paths_sort(path)
 
 
 def update_loop():
@@ -649,11 +656,12 @@ def set_bg(event=None):
 def set_order(event=None):
     """Set order."""
     global SORT
-    i = SORTS.index(SORT) if SORT in SORTS else "natural"
+    i = SORTS.index(SORT) if SORT in SORTS else -1
     i = (i + 1) % len(SORTS)
     SORT = SORTS[i]
-    log.info("Sort %s", SORT)
-    toast("Sort: " + SORT)
+    s = "Sort: " + SORT
+    log.info(s)
+    toast(s)
     paths_sort()
 
 
@@ -667,7 +675,9 @@ def set_verbosity(event=None):
 
     logging.basicConfig(level=VERBOSITY)  # Show up in nested shells in Windows 11.
     log.setLevel(VERBOSITY)
-    # print("Log level %s" % logging.getLevelName(VERBOSITY))
+    s = "Log level %s" % logging.getLevelName(log.getEffectiveLevel())
+    toast(s)
+    print(s)
 
 
 def slideshow_run(event=None):
