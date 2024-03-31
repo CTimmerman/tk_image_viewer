@@ -1,26 +1,17 @@
-# pylint: disable=consider-using-f-string, global-statement, too-many-boolean-expressions, unused-argument
+# pylint: disable=consider-using-f-string, global-statement, multiple-imports, too-many-boolean-expressions, unused-argument
 """Tk Image Viewer
 by Cees Timmerman
 2024-03-17 First version.
 2024-03-23 Save stuff.
 2024-03-24 Zip and multiframe image animation support.
 2024-03-27 Set sort order. Support EML, MHT, MHTML.
-2024-03-30 Copy info + paste picture(s)/paths.
+2024-03-30 Copy info + paste/drop picture(s)/paths.
 """
-import base64
-import enum
-import functools
-import logging
-import os
-import pathlib
-import random
-import re
-import time
-import tkinter
-import zipfile
+import base64, enum, functools, logging, os, pathlib, random, re, time, tkinter, zipfile
 from io import BytesIO
 from tkinter import filedialog, messagebox
 
+from tkinterdnd2 import DND_FILES, TkinterDnD
 from PIL import ExifTags, Image, ImageGrab, ImageTk, IptcImagePlugin, TiffTags
 from PIL.Image import Transpose
 from pillow_heif import register_heif_opener  # type: ignore
@@ -196,6 +187,21 @@ def delete_file(event=None):
     if answer is True:
         log.warning("Deleting %s", path)
         paths_update()
+
+
+@log_this
+def drop_handler(event):
+    """Handles dropped files."""
+    global paths, path_index
+    log.debug("Dropped %r", event.data)
+    paths = [
+        pathlib.Path(line.strip('"'))
+        for line in re.findall("{(.+?)}" if "{" in event.data else "[^ ]+", event.data)
+    ]  # Windows 11.
+    if isinstance(paths, list):
+        log.debug("Set paths to %s", paths)
+        path_index = 0
+        image_load()
 
 
 def help_handler(event=None):
@@ -559,7 +565,6 @@ def path_save(event=None):
 def paths_sort():
     """Sort paths."""
     log.debug("Sorting %s", SORT)
-
     for s in SORT.split(","):
         if s == "natural":
             paths.sort(
@@ -793,7 +798,10 @@ def zoom_text(event):
     STATUS_OVERLAY.config(font=("Consolas", new_font_size * 2))
 
 
-root = tkinter.Tk()
+root = TkinterDnD.Tk()  # notice - use this instead of tk.Tk()
+root.drop_target_register(DND_FILES)
+root.dnd_bind("<<Drop>>", drop_handler)
+
 root.title(TITLE)
 screen_w, screen_h = root.winfo_screenwidth(), root.winfo_screenheight()
 geometry = f"{screen_w // 2}x{screen_h // 2}+100+100"
