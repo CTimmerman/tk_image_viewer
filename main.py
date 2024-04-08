@@ -1,4 +1,4 @@
-# pylint: disable=consider-using-f-string, global-statement, multiple-imports, too-many-boolean-expressions, too-many-lines, unused-argument
+# pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, too-many-boolean-expressions, too-many-lines, unused-argument
 """Tk Image Viewer
 by Cees Timmerman
 2024-03-17 First version.
@@ -6,12 +6,13 @@ by Cees Timmerman
 2024-03-24 Zip and multiframe image animation support.
 2024-03-27 Set sort order. Support EML, MHT, MHTML.
 2024-03-30 Copy info + paste/drop picture(s)/paths.
+2024-04-08 Scroll/drag.
 """
-import base64, enum, functools, logging, os, pathlib, random, re, time, tkinter, zipfile
+import base64, enum, functools, logging, os, pathlib, random, re, time, tkinter, zipfile  # noqa: E401
 from io import BytesIO
 from tkinter import filedialog, messagebox
 
-from tkinterdnd2 import DND_FILES, TkinterDnD
+from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
 from PIL import ExifTags, Image, ImageGrab, ImageTk, IptcImagePlugin, TiffTags
 from PIL.Image import Transpose
 from pillow_heif import register_heif_opener  # type: ignore
@@ -43,6 +44,7 @@ SCALE_TEXT = 1.0
 SHOW_INFO = False
 SORTS = "natural string ctime mtime size".split()
 SORT = "natural"
+SUPPORTED_FILES: list = []
 TITLE = __doc__.split("\n", 1)[0]
 TRANSPOSE_INDEX = -1
 VERBOSITY_LEVELS = [
@@ -85,12 +87,19 @@ def animation_toggle(event=None):
         toast("Starting animation.")
         im_resize(ANIMATION_ON)
     else:
-        toast("Stopping animation.")
+        s = (
+            "Stopping animation."
+            + f" Frame {1 + (1 + IM_FRAME) % IMAGE.n_frames}/{IMAGE.n_frames}"
+            if hasattr(IMAGE, "n_frames")
+            else ""
+        )
+        log.info(s)
+        toast(s)
 
 
 @log_this
 def browse(event=None):
-    """Go to next or previous file."""
+    """Next/previous file."""
     global path_index, ZIP_INDEX
 
     new_index = path_index
@@ -115,7 +124,7 @@ def browse(event=None):
             new_index = path_index + 1
         else:
             ZIP_INDEX = new_index
-            image_load()
+            im_load()
             return
 
     if new_index < 0:
@@ -125,7 +134,7 @@ def browse(event=None):
 
     path_index = new_index
     ZIP_INDEX = 0
-    image_load()
+    im_load()
 
 
 @log_this
@@ -154,7 +163,7 @@ def clipboard_paste(event):
         paths = [pathlib.Path(s) for s in im]
         log.debug("Set paths to %s", paths)
         path_index = 0
-        image_load()
+        im_load()
         return
     IMAGE = im
     INFO = {"Pasted": time.ctime()}
@@ -173,7 +182,6 @@ def close(event=None):
         event.widget.quit()
 
 
-@log_this
 def debug_keys(event=None):
     """Show all keys."""
 
@@ -201,7 +209,14 @@ def drop_handler(event):
     if isinstance(paths, list):
         log.debug("Set paths to %s", paths)
         path_index = 0
-        image_load()
+        im_load()
+
+
+def error_show(msg: str):
+    """Show error."""
+    log.error(msg)
+    ERROR_OVERLAY.config(text=msg)
+    ERROR_OVERLAY.lift()
 
 
 def help_handler(event=None):
@@ -210,7 +225,9 @@ def help_handler(event=None):
     SHOW_INFO = not SHOW_INFO
     if SHOW_INFO:
         msg = f"{TITLE}\nBinds:\n" + "\n".join(
-            f"{keys} - {fun.__doc__}" for fun, keys in binds if "Configure" not in keys
+            f"{keys} - {fun.__doc__}"
+            for fun, keys in binds
+            if "Configure" not in keys and "ButtonPress" not in keys
         )
         log.debug(msg)
         INFO_OVERLAY.config(text=msg)
@@ -279,12 +296,14 @@ def load_zip(path):
         IMAGE = Image.open(zf.open(names[ZIP_INDEX]))
 
 
-def image_load(path=None):
+def im_load(path=None):
     """Load image."""
-    global IMAGE
+    global IMAGE, IM_FRAME
 
-    if not path:
+    if not path and paths:
         path = paths[path_index]
+    else:
+        return
 
     msg = f"{path_index+1}/{len(paths)}"
     log.debug("Loading %s %s", msg, path)
@@ -300,6 +319,7 @@ def image_load(path=None):
             else:
                 IMAGE = Image.open(path)
         log.debug("Cached %s PIL_IMAGE", IMAGE.size)
+        IM_FRAME = 0
         if hasattr(IMAGE, "n_frames"):
             INFO["Frames"] = IMAGE.n_frames
         INFO.update(**IMAGE.info)
@@ -320,11 +340,9 @@ def image_load(path=None):
         OSError,
     ) as ex:
         err_msg = str(ex)
-        log.error(err_msg)
         IMAGE = None
         msg = f"{msg} {err_msg} {path}"
-        IMAGE_WIDGET.config(image="", text=msg)
-        IMAGE_WIDGET.im = None
+        error_show(msg)
         INFO_OVERLAY.config(text=msg)
         root.title(msg + " - " + TITLE)
 
@@ -347,7 +365,7 @@ def get_fit_ratio():
 def im_fit(im):
     """Fit image to window."""
     ratio = get_fit_ratio()
-    if ratio != 1.0:
+    if ratio != 1.0:  # NOSONAR
         w, h = im.size
         im = im.resize((int(w * ratio), int(h * ratio)), QUALITY)
     return im
@@ -406,14 +424,30 @@ def im_resize(loop=False):
         root.after(duration, im_resize, ANIMATION_ON)
 
 
-@log_this
 def im_show(im):
     """Show PIL image in Tk image widget."""
     global SCALE
     try:
-        tkim = ImageTk.PhotoImage(im)  # , format=fmt)
-        IMAGE_WIDGET.config(image=tkim, text="")  # Set it.
-        IMAGE_WIDGET.tkim = tkim  # Keep it. Why isn't this built in?!
+        canvas.tkim: ImageTk.PhotoImage = ImageTk.PhotoImage(im)  # type: ignore
+        log.debug("Canvas image to center in: %s", canvas.winfo_geometry())
+        canvas.itemconfig(canvas.image_ref, image=canvas.tkim, anchor="center")
+
+        try:
+            rw, rh = root.winfo_width(), root.winfo_height()
+            x, y, x2, y2 = canvas.bbox(canvas.image_ref)
+            w = x2 - x
+            h = y2 - y
+            log.debug("canvas im x, y, x2, y2, w, h %s", (x, y, x2, y2, w, h))
+            good_x = rw // 2 - w // 2
+            good_y = rh // 2 - h // 2
+            log.debug("centering canvas %s", (good_x - x, good_y - y))
+            # canvas.move(canvas.image_ref, -x + canvas.winfo_width() // 2, -y + canvas.winfo_height() // 2)
+            canvas.move(canvas.image_ref, good_x - x, good_y - y)
+        except TypeError as ex:
+            log.error(ex)
+
+        # canvas.move(canvas.image_ref, 10, 0)
+        ERROR_OVERLAY.lower()
     except MemoryError as ex:
         log.error("Out of memory. Scaling down. %s", ex)
         SCALE = max(SCALE_MIN, min(SCALE * 0.9, SCALE_MAX))
@@ -430,6 +464,57 @@ def im_show(im):
     )
     root.title(msg + " - " + TITLE)
     INFO_OVERLAY.configure(text=msg + "\n" + info_get())
+    scrollbars_set()
+
+
+def scroll(event):
+    """Scroll."""
+    k = event.keysym
+    if k == "Left":
+        canvas.xview_scroll(-10, "units")
+    elif k == "Right":
+        canvas.xview_scroll(10, "units")
+    if k == "Up":
+        canvas.yview_scroll(-10, "units")
+    elif k == "Down":
+        canvas.yview_scroll(10, "units")
+
+
+OLD_SCROLLREGION: tuple | None = None
+
+
+def scrollbars_set():
+    """Hide/show scrollbars."""
+    global OLD_SCROLLREGION
+    try:
+        x, y, x2, y2 = canvas.bbox(canvas.image_ref)
+        w = x2 - x
+        h = y2 - y
+        sv = max(0, y) + h > root.winfo_height()
+        # Vertical scrollbar causing horizontal scrollbar.
+        sh = max(0, x) + w > root.winfo_width() - 16 * sv
+        # Horizontal scrollbar causing vertical scrollbar.
+        sv = max(0, y) + h > root.winfo_height() - 16 * sh
+        if sh:
+            h += 16
+            scrollx.lift()
+        else:
+            scrollx.lower()
+
+        if sv:
+            w += 16
+            scrolly.lift()
+        else:
+            scrolly.lower()
+
+        scrollregion = (min(x, 0), min(y, 0), x + w, y + h)
+        if scrollregion != OLD_SCROLLREGION:
+            canvas.config(scrollregion=scrollregion)
+            canvas.xview_moveto(0)
+            canvas.yview_moveto(0)
+        OLD_SCROLLREGION = scrollregion
+    except TypeError as ex:
+        log.error(ex)
 
 
 def info_get() -> str:
@@ -444,7 +529,7 @@ def info_get() -> str:
     # Image File Directories (IFD)
     if hasattr(IMAGE, "tag_v2"):
         meta_dict = {TiffTags.TAGS_V2[key]: IMAGE.tag_v2[key] for key in IMAGE.tag_v2}
-        print(meta_dict)
+        log.debug("tag_v2 %s", meta_dict)
 
     # Exchangeable Image File (EXIF)
     # Workaround from https://github.com/python-pillow/Pillow/issues/5863
@@ -488,14 +573,45 @@ def info_toggle(event=None):
 
 @log_this
 def mouse_handler(event=None):
-    """Handle mouse events."""
+    """Next/Previous file."""
     if event.num == 5 or event.delta < 0:
         root.event_generate("<Down>")
     if event.num == 4 or event.delta > 0:
         root.event_generate("<Up>")
 
 
-SUPPORTED_FILES: list = []
+@log_this
+def drag_start(e):
+    """Keep start pos for delta move."""
+    canvas.dragx = e.x
+    canvas.dragy = e.y
+
+
+def drag(e):
+    """Drag image around."""
+    if e.widget != canvas:
+        return
+    x, y, x2, y2 = canvas.bbox(canvas.image_ref)
+    w = x2 - x
+    h = y2 - y
+    log.debug("Draggin image: %s", (x, y, x2, y2, w, h))
+    dx, dy = e.x - canvas.dragx, e.y - canvas.dragy
+    # Keep at least a corner in view.
+    # Goes entirely out of view when switching to smaller imag!
+    # new_x = max(-w + 64, min(root.winfo_width() - 64, x + dx))
+    # new_y = max(-h + 64, min(root.winfo_height() - 64, y + dy))
+
+    new_x = max(0, min(root.winfo_width() - w, x + dx))
+    new_y = max(0, min(root.winfo_height() - h, y + dy))
+    if new_x == 0:
+        canvas.xview_scroll(-dx, "units")
+    if new_y == 0:
+        canvas.yview_scroll(-dy, "units")
+
+    dx, dy = new_x - x, new_y - y
+    canvas.move(canvas.image_ref, dx, dy)
+    scrollbars_set()
+    canvas.dragx, canvas.dragy = e.x, e.y
 
 
 def set_supported_files():
@@ -538,7 +654,7 @@ def path_save(event=None):
     else:
         p = paths[path_index]
 
-    print("Image info to be saved:", IMAGE.info)
+    log.debug("Image info to be saved: %s", IMAGE.info)
     filename = filedialog.asksaveasfilename(
         initialfile=p.absolute(), defaultextension=p.suffix, filetypes=SUPPORTED_FILES
     )
@@ -571,8 +687,11 @@ def paths_sort(path=None):
             path_index = paths.index(pathlib.Path(path))
         except ValueError:
             pass
-    else:
+    elif paths:
         path = paths[path_index]
+    else:
+        return
+
     for s in SORT.split(","):
         if s == "natural":
             paths.sort(
@@ -593,12 +712,10 @@ def paths_sort(path=None):
             paths.sort()
 
     try:
-        log.debug("old index %s", path_index)
         path_index = paths.index(pathlib.Path(path))
-        log.debug("new index %s", path_index)
+        im_load()
     except ValueError as ex:
-        log.error("update_index %s", ex)
-    image_load()
+        error_show("Not found: %s" % ex)
 
 
 @log_this
@@ -625,18 +742,32 @@ def update_loop():
         root.after(REFRESH_INTERVAL, update_loop)
 
 
+# lines = []
+
+
+@log_this
 def resize_handler(event):
     """Handle Tk resize event."""
     global WINDOW_SIZE
     new_size = root.winfo_geometry().split("+", maxsplit=1)[0]
+    # root_w = root.winfo_width()
+    # root_h = root.winfo_height()
+    # if not lines:
+    #     lines.append(canvas.create_line(0, 0, root_w, 0, 0, root_h, root_w, root_h, fill="#f00"))  # type: ignore
+    #     lines.append(canvas.create_line(0, root_h, 0, 0, root_w, root_h, root_w, 0, fill="#f00"))  # type: ignore
+    # else:
+    #     canvas.coords(lines[0], 0, 0, root_w, 0, 0, root_h, root_w, root_h)
+    #     canvas.coords(lines[1], 0, root_h, 0, 0, root_w, root_h, root_w, 0)
     if WINDOW_SIZE != new_size:
-        log.debug("%s", f"{WINDOW_SIZE} -> {new_size}")
+        log.debug("%s", f"Resizing window, {WINDOW_SIZE} -> {new_size}")
         log.debug(INFO_OVERLAY.winfo_geometry())
-        IMAGE_WIDGET.config(wraplength=event.width)
+        ERROR_OVERLAY.config(wraplength=event.width)
         INFO_OVERLAY.config(wraplength=event.width)
         STATUS_OVERLAY.config(wraplength=event.width)
         if WINDOW_SIZE and FIT:
             im_resize()
+        else:
+            scrollbars_set()
         WINDOW_SIZE = new_size
 
 
@@ -648,8 +779,9 @@ def set_bg(event=None):
     if BG_INDEX >= len(BG_COLORS):
         BG_INDEX = 0
     bg = BG_COLORS[BG_INDEX]
-    root.config(background=bg)
-    IMAGE_WIDGET.config(background=bg)
+    root.config(bg=bg)
+    canvas.config(bg=bg)
+    ERROR_OVERLAY.config(bg=bg)
 
 
 @log_this
@@ -734,7 +866,7 @@ def fit_handler(event):
     """Resize type to fit window."""
     global FIT
     FIT = (FIT + 1) % len(Fits)
-    toast(Fits(FIT))
+    toast(str(Fits(FIT)))
     im_resize()
 
 
@@ -772,7 +904,7 @@ def zoom(event):
         k = "plus"
     if event.num == 4 or event.delta > 0:
         k = "minus"
-    if k == "plus":
+    if k in ("plus", "equal"):
         SCALE *= 1.1
     elif k == "minus":
         SCALE *= 0.9
@@ -784,14 +916,14 @@ def zoom(event):
 
 @log_this
 def zoom_text(event):
-    """Zoom text of overlays."""
+    """Zoom text."""
     global SCALE_TEXT
     k = event.keysym if event else "plus"
     if event.num == 5 or event.delta < 0:
         k = "plus"
     if event.num == 4 or event.delta > 0:
         k = "minus"
-    if k == "plus":
+    if k in ("plus", "equal"):
         SCALE_TEXT *= 1.1
     elif k == "minus":
         SCALE_TEXT *= 0.9
@@ -803,7 +935,7 @@ def zoom_text(event):
 
     log.info("Text scale: %s New font size: %s", SCALE_TEXT, new_font_size)
 
-    IMAGE_WIDGET.config(font=("Consolas", new_font_size))
+    ERROR_OVERLAY.config(font=("Consolas", new_font_size))
     INFO_OVERLAY.config(font=("Consolas", new_font_size))
     STATUS_OVERLAY.config(font=("Consolas", new_font_size * 2))
 
@@ -813,9 +945,12 @@ root.drop_target_register(DND_FILES)
 root.dnd_bind("<<Drop>>", drop_handler)
 
 root.title(TITLE)
-screen_w, screen_h = root.winfo_screenwidth(), root.winfo_screenheight()
-geometry = f"{screen_w // 2}x{screen_h // 2}+100+100"
+root_w, root_h = int(root.winfo_screenwidth() * 0.75), int(
+    root.winfo_screenheight() * 0.75
+)
+geometry = f"{root_w}x{root_h}+{int(root_w * 0.125)}+{int(root_h * 0.125)}"
 root.geometry(geometry)
+
 SLIDESHOW_ON = False
 SLIDESHOW_PAUSE = 4000
 STATUS_OVERLAY = tkinter.Label(
@@ -824,7 +959,7 @@ STATUS_OVERLAY = tkinter.Label(
     font=("Consolas", FONT_SIZE * 2),
     fg="#00FF00",
     bg="black",
-    wraplength=screen_w,
+    wraplength=root_w,
     anchor="center",
     justify="center",
 )
@@ -835,26 +970,34 @@ INFO_OVERLAY = tkinter.Label(
     font=("Consolas", FONT_SIZE),
     fg="yellow",
     bg="black",
-    wraplength=screen_w,
+    wraplength=root_w,
     anchor="nw",
     justify="left",
 )
 INFO_OVERLAY.place(x=0, y=0)
-IMAGE_WIDGET = tkinter.Label(
+
+canvas = tkinter.Canvas(borderwidth=0, highlightthickness=0, relief="flat")
+canvas.place(x=0, y=0, relwidth=1, relheight=1)
+# canvas.image_ref = canvas.create_image(0, 0, anchor="nw")  # type: ignore
+canvas.image_ref = canvas.create_image(root_w // 2, root_h // 2, anchor="center")  # type: ignore
+scrollx = tkinter.Scrollbar(root, orient="horizontal", command=canvas.xview)
+scrollx.place(x=0, y=1, relwidth=1, relx=1, rely=1, anchor="se")
+scrolly = tkinter.Scrollbar(root, command=canvas.yview)
+scrolly.place(x=1, y=0, relheight=1, relx=1, rely=1, anchor="se")
+canvas.config(xscrollcommand=scrollx.set, yscrollcommand=scrolly.set)
+ERROR_OVERLAY = tkinter.Label(
     root,
     compound="center",
     fg="red",
     font=("Consolas", FONT_SIZE),
-    width=screen_w,
-    height=screen_h,
-    wraplength=int(screen_w / 2),
+    width=root_w,
+    height=root_h,
+    wraplength=root_w,
 )
-IMAGE_WIDGET.place(x=0, y=0, relwidth=1, relheight=1)
-
+ERROR_OVERLAY.place(x=0, y=0, relwidth=1, relheight=1)
 set_bg()
 
 root.bind_all("<Key>", debug_keys)
-
 binds = [
     (close, "Escape q"),
     (help_handler, "F1 h"),
@@ -867,7 +1010,10 @@ binds = [
     (paths_update, "F5 u"),
     (set_order, "o"),
     (set_bg, "b c"),
-    (zoom, "Control-MouseWheel minus plus equal"),
+    (drag_start, "ButtonPress"),
+    (drag, "B1-Motion B2-Motion B3-Motion"),
+    (scroll, "Control-Left Control-Right Control-Up Control-Down"),
+    (zoom, "Control-MouseWheel minus plus equal 0"),
     (zoom_text, "Alt-MouseWheel Alt-minus Alt-plus Alt-equal"),
     (fit_handler, "r"),
     (animation_toggle, "a"),
@@ -904,10 +1050,10 @@ def main(args):
     TRANSPOSE_INDEX = args.transpose
 
     # Needs visible window so wait for mainloop.
-    root.after(100, paths_update, None, args.path)
+    root.after(50, paths_update, None, args.path)
 
     if args.fullscreen:
-        root.after(500, fullscreen_toggle)
+        root.after(100, fullscreen_toggle)
 
     if args.geometry:
         root.geometry(args.geometry)

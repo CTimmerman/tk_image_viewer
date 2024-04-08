@@ -31,16 +31,18 @@ Binds:
 Escape q - Close fullscreen or app.
 F1 h - Show help.
 F11 Return f - Toggle fullscreen.
-Left Right Up Down Key-1 x - Go to next or previous file.
-MouseWheel Button-4 Button-5 - Handle mouse events.
+Left Right Up Down Key-1 x - Next/previous file.
+MouseWheel Button-4 Button-5 - Next/Previous file.
 p - Pick a file to open.
 s - Save file as.
 Delete - Delete file.
 F5 u - Refresh path info.
 o - Set order.
 b c - Set background color.
-Control-MouseWheel minus plus equal - Zoom.
-Alt-MouseWheel Alt-minus Alt-plus Alt-equal - Zoom text of overlays.
+B1-Motion B2-Motion B3-Motion - Drag image around.
+Control-Left Control-Right Control-Up Control-Down - Scroll.
+Control-MouseWheel minus plus equal 0 - Zoom.
+Alt-MouseWheel Alt-minus Alt-plus Alt-equal - Zoom text.
 r - Resize type to fit window.
 a - Toggle animation.
 Pause - Toggle slideshow.
