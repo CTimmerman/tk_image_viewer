@@ -140,7 +140,7 @@ def browse(event=None):
 
 @log_this
 def clipboard_copy(event):
-    """Copy info to clipboard."""
+    """Copy info to clipboard while app is running."""
     root.clipboard_clear()
     root.clipboard_append(
         "{}\n{}".format(root.title(), "\n".join(f"{k}: {v}" for k, v in INFO.items()))
@@ -188,13 +188,16 @@ def debug_keys(event=None):
 
 
 def delete_file(event=None):
-    """Delete file."""
+    """Delete file. Bypasses Trash."""
     path = paths[path_index]
     msg = f"Delete? {path}"
     log.warning(msg)
-    answer = messagebox.askyesno("Delete file?", f"Delete {path}?")
-    if answer is True:
+    answer = messagebox.showwarning(
+        "Delete File", f"Permanently delete {path}?", type=messagebox.YESNO
+    )
+    if answer == "yes":
         log.warning("Deleting %s", path)
+        os.remove(path)
         paths_update()
 
 
@@ -225,8 +228,8 @@ def help_handler(event=None):
     global SHOW_INFO
     SHOW_INFO = not SHOW_INFO
     if SHOW_INFO:
-        msg = f"{TITLE}\nBinds:\n" + "\n".join(
-            f"{keys} - {fun.__doc__}"
+        msg = "\n".join(
+            f"{keys.replace('Control', 'Ctrl')} - {fun.__doc__}"
             for fun, keys in binds
             if "Configure" not in keys and "ButtonPress" not in keys
         )
@@ -673,7 +676,7 @@ def path_save(event=None):
         except (IOError, KeyError, TypeError, ValueError) as ex:
             msg = f"Failed to save as {filename}. {ex}"
             log.error(msg)
-            toast(msg, fg="red")
+            toast(msg, 4000, "red")
 
 
 def paths_sort(path=None):
@@ -718,7 +721,7 @@ def paths_sort(path=None):
 
 @log_this
 def paths_update(event=None, path=None):
-    """Refresh path info."""
+    """Update path info."""
     global paths
     if not path:
         path = paths[path_index]
@@ -836,24 +839,15 @@ def toast(msg: str, ms: int = 2000, fg="#00FF00"):
 
 
 @log_this
-def transpose_inc(event=None):
-    """Increment transpose."""
+def transpose_set(event=None):
+    """Transpose image."""
     global TRANSPOSE_INDEX
-    TRANSPOSE_INDEX += 1
+    TRANSPOSE_INDEX += -1 if event.keysym == "T" else 1
     if TRANSPOSE_INDEX >= len(Transpose):
         TRANSPOSE_INDEX = -1
-    if TRANSPOSE_INDEX >= 0:
-        toast(f"Transpose: {Transpose(TRANSPOSE_INDEX).name}")
-    im_resize()
-
-
-@log_this
-def transpose_dec(event=None):
-    """Decrement transpose."""
-    global TRANSPOSE_INDEX
-    TRANSPOSE_INDEX -= 1
     if TRANSPOSE_INDEX < -1:
         TRANSPOSE_INDEX = len(Transpose) - 1
+
     if TRANSPOSE_INDEX >= 0:
         toast(f"Transpose: {Transpose(TRANSPOSE_INDEX).name}")
     im_resize()
@@ -1016,8 +1010,7 @@ binds = [
     (fit_handler, "r"),
     (animation_toggle, "a"),
     (slideshow_toggle, "Pause"),
-    (transpose_inc, "t"),
-    (transpose_dec, "T"),
+    (transpose_set, "t Shift-t"),
     (info_toggle, "i"),
     (clipboard_copy, "Control-c"),
     (clipboard_paste, "Control-v"),
