@@ -28,6 +28,7 @@ options:
 Binds:
 
 ```pre
+Escape q - Close fullscreen or app.
 F1 h - Show help.
 F11 Return f - Toggle fullscreen.
 Left Right Up Down Key-1 x - Next/previous file.
