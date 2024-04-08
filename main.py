@@ -35,6 +35,7 @@ FONT_SIZE = 14
 IMAGE: Image.Image | None = None
 IM_FRAME = 0
 INFO: dict = {}
+OLD_INDEX = -1
 QUALITY = Image.Resampling.NEAREST  # 0
 REFRESH_INTERVAL = 0
 SCALE = 1.0
@@ -480,12 +481,9 @@ def scroll(event):
         canvas.yview_scroll(10, "units")
 
 
-OLD_SCROLLREGION: tuple | None = None
-
-
 def scrollbars_set():
     """Hide/show scrollbars."""
-    global OLD_SCROLLREGION
+    global OLD_INDEX
     try:
         x, y, x2, y2 = canvas.bbox(canvas.image_ref)
         w = x2 - x
@@ -508,11 +506,11 @@ def scrollbars_set():
             scrolly.lower()
 
         scrollregion = (min(x, 0), min(y, 0), x + w, y + h)
-        if scrollregion != OLD_SCROLLREGION:
-            canvas.config(scrollregion=scrollregion)
+        canvas.config(scrollregion=scrollregion)
+        if path_index != OLD_INDEX:
             canvas.xview_moveto(0)
             canvas.yview_moveto(0)
-        OLD_SCROLLREGION = scrollregion
+            OLD_INDEX = path_index
     except TypeError as ex:
         log.error(ex)
 
