@@ -419,7 +419,7 @@ def im_resize(loop=False):
             IMAGE.seek(IM_FRAME)
         except EOFError as ex:
             log.error("IMAGE EOF. %s", ex)
-        duration = INFO["duration"] if "duration" in INFO else 100
+        duration = (INFO["duration"] or 100) if "duration" in INFO else 100
         log.debug("Duration %s", duration)
         root.after(duration, im_resize, ANIMATION_ON)
 
