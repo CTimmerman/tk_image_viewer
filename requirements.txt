@@ -1,3 +1,4 @@
 pillow
+pillow-avif-plugin
 pillow-heif
 tkinterdnd2

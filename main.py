@@ -1,4 +1,4 @@
-# pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, too-many-boolean-expressions, too-many-lines, unused-argument
+# pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, too-many-boolean-expressions, too-many-lines, unused-argument, unused-import
 """Tk Image Viewer
 by Cees Timmerman
 2024-03-17 First version.
@@ -7,13 +7,15 @@ by Cees Timmerman
 2024-03-27 Set sort order. Support EML, MHT, MHTML.
 2024-03-30 Copy info + paste/drop picture(s)/paths.
 2024-04-08 Scroll/drag.
+2024-04-10 AVIF support.
 """
 import base64, enum, functools, logging, os, pathlib, random, re, time, tkinter, zipfile  # noqa: E401
 from io import BytesIO
 from tkinter import filedialog, messagebox
 
 from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
-from PIL import ExifTags, Image, ImageGrab, ImageTk, IptcImagePlugin, TiffTags
+import pillow_avif  # Patches PIL.Image
+from PIL import ExifTags, Image, ImageCms, ImageGrab, ImageTk, IptcImagePlugin, TiffTags
 from PIL.Image import Transpose
 from pillow_heif import register_heif_opener  # type: ignore
 
@@ -527,6 +529,22 @@ def info_get() -> str:
     if not IMAGE:
         return msg
 
+    icc = IMAGE.info.get("icc_profile")
+    if icc:
+        icc_str = str(icc).replace("\x00", "")
+        p = ImageCms.ImageCmsProfile(BytesIO(icc))
+        intent = ImageCms.getDefaultIntent(p)
+        msg += f"""
+        International Color Consortium Profile: {icc_str}
+        Copyright: {ImageCms.getProfileCopyright(p)}
+        Description: {ImageCms.getProfileDescription(p)}
+        Intent: {intent}
+        isIntentSupported: {ImageCms.isIntentSupported(p, intent, 1)}
+        Manufacturer: {ImageCms.getProfileManufacturer(p)}
+        Model: {ImageCms.getProfileModel(p)}
+
+        """
+
     # Image File Directories (IFD)
     if hasattr(IMAGE, "tag_v2"):
         meta_dict = {TiffTags.TAGS_V2[key]: IMAGE.tag_v2[key] for key in IMAGE.tag_v2}
@@ -540,15 +558,15 @@ def info_get() -> str:
             msg += "\nEXIF:"
             for key, val in exif.items():
                 if key in ExifTags.TAGS:
-                    msg += f"\n{ExifTags.TAGS[key]}: {val}"
+                    msg += f"\n{ExifTags.TAGS[key]}: {val.decode('utf_16_le')}"
                 else:
-                    msg += f"\nUnknown EXIF tag {key}: {val}"
+                    msg += f"\nUnknown EXIF tag {key}: {val.decode('utf_16_le')}"
 
         # Image File Directory (IFD)
         exif = IMAGE.getexif()
         for k in ExifTags.IFD:
             try:
-                msg += f"\nIFD tag {k}: {ExifTags.IFD(k)}: {exif.get_ifd(k)}"
+                msg += f"\nIFD tag {k}: {ExifTags.IFD(k).name}: {exif.get_ifd(k)}"
             except KeyError:
                 log.debug("IFD not found. %s", k)
 
@@ -668,8 +686,9 @@ def path_save(event=None):
                 # exif=INFO.get("exif", b""),
                 # icc_profile=INFO.get("icc_profile", b""),
                 **IMAGE.info,
+                lossless=True,
                 optimize=True,
-                # save_all=True,
+                save_all=True,  # All frames.
             )
             paths_update()
             toast(f"Saved {filename}")
