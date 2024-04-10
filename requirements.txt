@@ -2,4 +2,5 @@ pillow
 pillow-avif-plugin
 pillow-heif
 pillow-jxl-plugin
+svgpathtools
 tkinterdnd2
