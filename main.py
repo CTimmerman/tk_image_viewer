@@ -1,4 +1,4 @@
-# pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, too-many-boolean-expressions, too-many-lines, unused-argument, unused-import
+# pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, too-many-boolean-expressions, too-many-branches, too-many-lines, unused-argument, unused-import
 """Tk Image Viewer
 by Cees Timmerman
 2024-03-17 First version.
@@ -7,14 +7,15 @@ by Cees Timmerman
 2024-03-27 Set sort order. Support EML, MHT, MHTML.
 2024-03-30 Copy info + paste/drop picture(s)/paths.
 2024-04-08 Scroll/drag.
-2024-04-10 AVIF support.
+2024-04-10 AVIF & JXL support.
 """
 import base64, enum, functools, logging, os, pathlib, random, re, time, tkinter, zipfile  # noqa: E401
 from io import BytesIO
 from tkinter import filedialog, messagebox
 
 from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
-import pillow_avif  # Patches PIL.Image
+import pillow_avif  # type: ignore  # Patches PIL.Image
+import pillow_jxl
 from PIL import ExifTags, Image, ImageCms, ImageGrab, ImageTk, IptcImagePlugin, TiffTags
 from PIL.Image import Transpose
 from pillow_heif import register_heif_opener  # type: ignore
@@ -37,6 +38,8 @@ FONT_SIZE = 14
 IMAGE: Image.Image | None = None
 IM_FRAME = 0
 INFO: dict = {}
+lines: list = []
+lines_on: bool = False
 OLD_INDEX = -1
 QUALITY = Image.Resampling.NEAREST  # 0
 REFRESH_INTERVAL = 0
@@ -102,7 +105,7 @@ def animation_toggle(event=None):
 
 @log_this
 def browse(event=None):
-    """Next/previous file."""
+    """Browse."""
     global path_index, ZIP_INDEX
 
     new_index = path_index
@@ -111,11 +114,17 @@ def browse(event=None):
         new_index = ZIP_INDEX
 
     k = event.keysym if event else "Next"
-    if k == "1":
+    # if k == "Next":
+    if event.num == 4 or event.delta > 0:
+        k = "Up"
+
+    if k in ("1", "Home"):
         new_index = 0
+    elif k == "End":
+        new_index = path_index - 1
     elif k == "x":
         new_index = random.randint(0, len(paths) - 1)
-    elif k in ("Left", "Up", "Button-4"):
+    elif k in ("Left", "Up", "Button-4", "BackSpace"):
         new_index -= 1
     else:
         new_index += 1
@@ -242,6 +251,18 @@ def help_handler(event=None):
         INFO_OVERLAY.lower()
 
 
+def lines_toggle(event):
+    """Toggle line overlay."""
+    global lines, lines_on
+    if lines:
+        for line in lines:
+            canvas.delete(line)
+        lines = []
+    lines_on = not lines_on
+    toast("Lines: %s" % lines_on)
+    resize_handler()
+
+
 def set_stats(path):
     """Set stats."""
     global INFO
@@ -336,14 +357,16 @@ def im_load(path=None):
                 str(v)[:80] + "..." if len(str(v)) > 80 else v,
             )
         im_resize(ANIMATION_ON)
+    # pylint: disable=W0718
     except (
         tkinter.TclError,
         IOError,
-        MemoryError,
-        EOFError,
-        ValueError,
-        BufferError,
-        OSError,
+        MemoryError,  # NOSONAR
+        EOFError,  # NOSONAR
+        ValueError,  # NOSONAR
+        BufferError,  # NOSONAR
+        OSError,  # NOSONAR
+        BaseException,  # NOSONAR  # https://github.com/PyO3/pyo3/issues/3519
     ) as ex:
         err_msg = str(ex)
         IMAGE = None
@@ -529,21 +552,30 @@ def info_get() -> str:
     if not IMAGE:
         return msg
 
+    msg += f"""
+Format: {IMAGE.format}
+MIME type: {IMAGE.get_format_mimetype()}"""  # type: ignore
+
     icc = IMAGE.info.get("icc_profile")
     if icc:
         icc_str = str(icc).replace("\x00", "")
         p = ImageCms.ImageCmsProfile(BytesIO(icc))
         intent = ImageCms.getDefaultIntent(p)
+        man = ImageCms.getProfileManufacturer(p).strip()
+        model = ImageCms.getProfileModel(p).strip()
         msg += f"""
-        International Color Consortium Profile: {icc_str}
-        Copyright: {ImageCms.getProfileCopyright(p)}
-        Description: {ImageCms.getProfileDescription(p)}
-        Intent: {intent}
-        isIntentSupported: {ImageCms.isIntentSupported(p, intent, 1)}
-        Manufacturer: {ImageCms.getProfileManufacturer(p)}
-        Model: {ImageCms.getProfileModel(p)}
 
-        """
+International Color Consortium Profile:
+Copyright: {ImageCms.getProfileCopyright(p).strip()}
+Description: {ImageCms.getProfileDescription(p).strip()}
+Intent: {('Perceptual', 'Relative colorimetric', 'Saturation', 'Absolute colorimetric')[intent]}
+isIntentSupported: {ImageCms.isIntentSupported(p, intent, 1)}
+Raw: {icc_str}
+"""
+        if man:
+            msg += f"Manufacturer: {man}"
+        if model:
+            msg += f"Model: {model}"
 
     # Image File Directories (IFD)
     if hasattr(IMAGE, "tag_v2"):
@@ -555,12 +587,18 @@ def info_get() -> str:
     if hasattr(IMAGE, "_getexif"):
         exif = IMAGE._getexif()  # pylint: disable=protected-access
         if exif:
-            msg += "\nEXIF:"
+            msg += "\n\nEXIF:"
             for key, val in exif.items():
+                if isinstance(val, bytes):
+                    val = val.decode("utf_16_le")
+                    log.debug(
+                        "==========================================================\nDecoded %s",
+                        val,
+                    )
                 if key in ExifTags.TAGS:
-                    msg += f"\n{ExifTags.TAGS[key]}: {val.decode('utf_16_le')}"
+                    msg += f"\n{ExifTags.TAGS[key]}: {val}"
                 else:
-                    msg += f"\nUnknown EXIF tag {key}: {val.decode('utf_16_le')}"
+                    msg += f"\nUnknown EXIF tag {key}: {val}"
 
         # Image File Directory (IFD)
         exif = IMAGE.getexif()
@@ -588,15 +626,6 @@ def info_toggle(event=None):
         log.debug("Showing info:\n%s", INFO_OVERLAY["text"])
     else:
         INFO_OVERLAY.lower()
-
-
-@log_this
-def mouse_handler(event=None):
-    """Next/Previous file."""
-    if event.num == 5 or event.delta < 0:
-        root.event_generate("<Down>")
-    if event.num == 4 or event.delta > 0:
-        root.event_generate("<Up>")
 
 
 @log_this
@@ -762,22 +791,19 @@ def update_loop():
         root.after(REFRESH_INTERVAL, update_loop)
 
 
-# lines = []
-
-
-@log_this
-def resize_handler(event):
+def resize_handler(event=None):
     """Handle Tk resize event."""
     global WINDOW_SIZE
     new_size = root.winfo_geometry().split("+", maxsplit=1)[0]
-    # root_w = root.winfo_width()
-    # root_h = root.winfo_height()
-    # if not lines:
-    #     lines.append(canvas.create_line(0, 0, root_w, 0, 0, root_h, root_w, root_h, fill="#f00"))  # type: ignore
-    #     lines.append(canvas.create_line(0, root_h, 0, 0, root_w, root_h, root_w, 0, fill="#f00"))  # type: ignore
-    # else:
-    #     canvas.coords(lines[0], 0, 0, root_w, 0, 0, root_h, root_w, root_h)
-    #     canvas.coords(lines[1], 0, root_h, 0, 0, root_w, root_h, root_w, 0)
+    if lines_on:
+        w = root.winfo_width() - 1
+        h = root.winfo_height() - 1
+        if not lines:
+            lines.append(canvas.create_line(0, 0, w, 0, 0, h, w, h, fill="#f00"))  # type: ignore
+            lines.append(canvas.create_line(0, h, 0, 0, w, h, w, 0, fill="#f00"))  # type: ignore
+        else:
+            canvas.coords(lines[0], 0, 0, w, 0, 0, h, w, h)
+            canvas.coords(lines[1], 0, h, 0, 0, w, h, w, 0)
     if WINDOW_SIZE != new_size:
         log.debug("%s", f"Resizing window, {WINDOW_SIZE} -> {new_size}")
         log.debug(INFO_OVERLAY.winfo_geometry())
@@ -1013,8 +1039,10 @@ binds = [
     (close, "Escape q"),
     (help_handler, "F1 h"),
     (fullscreen_toggle, "F11 Return f"),
-    (browse, "Left Right Up Down Key-1 x"),
-    (mouse_handler, "MouseWheel Button-4 Button-5"),
+    (
+        browse,
+        "Left Right Up Down BackSpace space MouseWheel Button-4 Button-5 Home End Key-1 x",
+    ),
     (path_open, "p"),
     (path_save, "s"),
     (delete_file, "Delete"),
@@ -1029,6 +1057,7 @@ binds = [
     (fit_handler, "r"),
     (animation_toggle, "a"),
     (slideshow_toggle, "Pause"),
+    (lines_toggle, "l"),
     (transpose_set, "t Shift-t"),
     (info_toggle, "i"),
     (clipboard_copy, "Control-c"),
