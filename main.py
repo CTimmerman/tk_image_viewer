@@ -1,4 +1,4 @@
-# pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, too-many-boolean-expressions, too-many-branches, too-many-lines, unused-argument, unused-import
+# pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, too-many-boolean-expressions, too-many-branches, too-many-lines, too-many-locals, unused-argument, unused-import
 """Tk Image Viewer
 by Cees Timmerman
 2024-03-17 First version.
@@ -7,18 +7,35 @@ by Cees Timmerman
 2024-03-27 Set sort order. Support EML, MHT, MHTML.
 2024-03-30 Copy info + paste/drop picture(s)/paths.
 2024-04-08 Scroll/drag.
-2024-04-10 AVIF & JXL support.
+2024-04-10 AVIF, JXL, some SVG support.
 """
 import base64, enum, functools, logging, os, pathlib, random, re, time, tkinter, zipfile  # noqa: E401
 from io import BytesIO
 from tkinter import filedialog, messagebox
+import traceback
 
 from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
 import pillow_avif  # type: ignore  # noqa: F401  # pylint: disable=E0401
 import pillow_jxl  # noqa: F401
-from PIL import ExifTags, Image, ImageCms, ImageGrab, ImageTk, IptcImagePlugin, TiffTags
+from PIL import (
+    ExifTags,
+    Image,
+    ImageCms,
+    ImageColor,
+    ImageDraw,
+    ImageGrab,
+    ImageTk,
+    IptcImagePlugin,
+    TiffTags,
+)
 from PIL.Image import Transpose
 from pillow_heif import register_heif_opener  # type: ignore
+
+
+# For libcairo
+# os.environ["PATH"] = os.pathsep.join((".", os.environ["PATH"]))
+
+from svgpathtools import svg2paths2, wsvg, Line  # type: ignore
 
 
 class Fits(enum.IntEnum):
@@ -263,7 +280,6 @@ def info_update():
     canvas.overlay_tkim = ImageTk.PhotoImage(  # type: ignore
         Image.new("RGBA", (x2 - x1, y2 - y1), "#000a")
     )
-    log.debug("Setting overlay %s %s", canvas.overlay_tkim, (x2 - x1, y2 - y1))
     canvas.itemconfig(canvas.overlay, image=canvas.overlay_tkim)  # type: ignore
 
 
@@ -328,6 +344,74 @@ def load_mhtml(path):
         log.error("DECODED %s", im_file.read()[:80])
 
 
+def load_svg(fpath):
+    """Load an SVG file."""
+    global IMAGE
+
+    svgpaths, attributes, svg_attributes = svg2paths2(fpath)
+    print(
+        "SVG PATHS\n",
+        "\n".join(str(p) for p in svgpaths),
+        "\nPATH ATTRS\n",
+        "\n".join(str(s) for s in attributes),
+        "\nSVG ATTRS\n",
+        svg_attributes,
+    )
+    w, h = svg_attributes["viewBox"].split()[2:]
+    IMAGE = Image.new("RGBA", (int(float(w)), int(float(h))), (100, 100, 100, 100))
+    print(IMAGE, IMAGE.size)
+    IMAGE.format = "SVG"
+    ctx = ImageDraw.Draw(IMAGE)
+    try:
+        for i, path in enumerate(svgpaths):
+            attrs = attributes[i]
+            opacity = 1.0
+            fill = "red"
+            if "fill" in attrs:
+                fill = attrs["fill"]
+            elif "style" in attrs:
+                style = attributes[i]["style"]
+                fill = re.findall(r"fill:\s*([#0-9a-zA-Z]+)", style)
+                if fill:
+                    fill = fill[0]
+                stroke = re.findall(r"stroke:\s*([#0-9a-zA-Z]+)", style)
+                if stroke:
+                    fill = stroke[0]
+                if "opacity" in style:
+                    opacity = float(re.findall(r"opacity:\s*([.0-9]+)", style)[0])
+
+            try:
+                color = (
+                    ImageColor.getcolor(
+                        (
+                            "black"
+                            if fill == "none"
+                            else "white" if "url" in fill else fill
+                        ),
+                        "RGB",
+                    )
+                    if fill
+                    else (255, 0, 0)
+                )
+            except ValueError as ex:
+                log.error(ex)
+                color = (255, 0, 0)
+
+            if opacity:
+                color = (*color, int(opacity * 255))
+            print("COLOR", color, "FILL", fill)
+            for el in path:
+                log.debug("Drawing %s", (el, color))
+                if isinstance(el, Line):
+                    xy = (int(el.start.real), int(el.start.imag))
+                    xy2 = (int(el.end.real), int(el.end.imag))
+                    ctx.line(xy=(xy, xy2), fill=color, width=1)
+                # ctx.polygon(path, fill=fill[0] if fill else 'red')  #, outline=None)
+    except Exception as ex:  # pylint: disable=W0718
+        print("SVG ERROR")
+        traceback.print_exception(ex)
+
+
 def load_zip(path):
     """Load a zip file."""
     global IMAGE
@@ -357,6 +441,8 @@ def im_load(path=None):
             set_stats(path)
             if path.suffix == ".zip":
                 load_zip(path)
+            elif path.suffix == ".svg":
+                load_svg(path)
             elif path.suffix in (".eml", ".mht", ".mhtml"):
                 load_mhtml(path)
             else:
@@ -537,7 +623,6 @@ def scrollbars_set():
         x, y, x2, y2 = canvas.bbox(canvas.image_ref, canvas_info)
         w = x2 - x
         h = y2 - y
-        log.debug("Fitting %s", (w, h, canvas.bbox(canvas_info)))
         sv = max(0, y) + h > root.winfo_height()
         # Vertical scrollbar causing horizontal scrollbar.
         sh = max(0, x) + w > root.winfo_width() - 16 * sv
@@ -574,10 +659,11 @@ def info_get() -> str:
     if not IMAGE:
         return msg
 
-    msg += f"""
-Format: {IMAGE.format}
-MIME type: {IMAGE.get_format_mimetype()}"""  # type: ignore
-
+    msg += f"\nFormat: {IMAGE.format}"
+    try:
+        msg += f"\nMIME type: {IMAGE.get_format_mimetype()}" ""  # type: ignore
+    except AttributeError:
+        pass
     icc = IMAGE.info.get("icc_profile")
     if icc:
         p = ImageCms.ImageCmsProfile(BytesIO(icc))
@@ -691,6 +777,7 @@ def set_supported_files():
     exts[".eml"] = "EML"
     exts[".mht"] = "MHT"
     exts[".mhtml"] = "MHTML"
+    exts[".svg"] = "SVG"
     exts[".zip"] = "ZIP"
 
     type_exts = {}
@@ -823,11 +910,12 @@ def resize_handler(event=None):
             canvas.coords(lines[0], 0, 0, w, 0, 0, h, w, h)
             canvas.coords(lines[1], 0, h, 0, 0, w, h, w, 0)
     if WINDOW_SIZE != new_size:
-        log.debug("%s", f"Resizing window, {WINDOW_SIZE} -> {new_size}")
         ERROR_OVERLAY.config(wraplength=event.width)
         TOAST.config(wraplength=event.width)
+        bb = canvas.bbox(canvas_info)
         canvas.itemconfig(canvas_info, width=event.width - 16)
-        info_update()
+        if bb != canvas.bbox(canvas_info):
+            info_update()
 
         if WINDOW_SIZE and FIT:
             im_resize()
@@ -951,7 +1039,6 @@ def fullscreen_toggle(event=None):
     # root.attributes("-fullscreen", not root.attributes("-fullscreen"))
 
 
-@log_this
 def zoom(event):
     """Zoom."""
     global SCALE
