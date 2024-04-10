@@ -30,7 +30,7 @@ class Fits(enum.IntEnum):
     SMALL = 3
 
 
-ANIMATION_ON = True
+ANIMATION_ON: bool = True
 BG_COLORS = ["black", "gray10", "gray50", "white"]
 BG_INDEX = -1
 FIT = 0
@@ -122,8 +122,8 @@ def browse(event=None):
         new_index = random.randint(0, len(paths) - 1)
     elif (
         k in ("Left", "Up", "Button-4", "BackSpace")
-        or event.num == 4
-        or event.delta > 0
+        or event
+        and (event.num == 4 or event.delta > 0)
     ):
         new_index -= 1
     else:
@@ -245,10 +245,26 @@ def help_handler(event=None):
             if "Configure" not in keys and "ButtonPress" not in keys
         )
         log.debug(msg)
-        INFO_OVERLAY.config(text=msg)
-        INFO_OVERLAY.lift()
+        info_set(msg)
+        canvas.lift(canvas.overlay)
     else:
-        INFO_OVERLAY.lower()
+        canvas.lower(canvas.overlay)
+
+
+def info_set(msg: str):
+    """Change info text."""
+    canvas.itemconfig(canvas_info, text=msg)  # type: ignore
+    info_update()
+
+
+def info_update():
+    """Update info overlay."""
+    x1, y1, x2, y2 = canvas.bbox(canvas_info)
+    canvas.overlay_tkim = ImageTk.PhotoImage(  # type: ignore
+        Image.new("RGBA", (x2 - x1, y2 - y1), "#000a")
+    )
+    log.debug("Setting overlay %s %s", canvas.overlay_tkim, (x2 - x1, y2 - y1))
+    canvas.itemconfig(canvas.overlay, image=canvas.overlay_tkim)  # type: ignore
 
 
 def lines_toggle(event):
@@ -368,11 +384,11 @@ def im_load(path=None):
         OSError,  # NOSONAR
         BaseException,  # NOSONAR  # https://github.com/PyO3/pyo3/issues/3519
     ) as ex:
-        err_msg = str(ex)
+        err_msg = f"{type(ex)} {ex}"
         IMAGE = None
         msg = f"{msg} {err_msg} {path}"
         error_show(msg)
-        INFO_OVERLAY.config(text=msg)
+        info_set(msg)
         root.title(msg + " - " + TITLE)
 
 
@@ -449,8 +465,11 @@ def im_resize(loop=False):
         except EOFError as ex:
             log.error("IMAGE EOF. %s", ex)
         duration = (INFO["duration"] or 100) if "duration" in INFO else 100
-        log.debug("Duration %s", duration)
-        root.after(duration, im_resize, ANIMATION_ON)
+        try:
+            root.after_cancel(root.animation)
+        except AttributeError:
+            pass
+        root.animation = root.after(duration, im_resize, ANIMATION_ON)
 
 
 def im_show(im):
@@ -458,7 +477,6 @@ def im_show(im):
     global SCALE
     try:
         canvas.tkim: ImageTk.PhotoImage = ImageTk.PhotoImage(im)  # type: ignore
-        log.debug("Canvas image to center in: %s", canvas.winfo_geometry())
         canvas.itemconfig(canvas.image_ref, image=canvas.tkim, anchor="center")
 
         try:
@@ -466,10 +484,8 @@ def im_show(im):
             x, y, x2, y2 = canvas.bbox(canvas.image_ref)
             w = x2 - x
             h = y2 - y
-            log.debug("canvas im x, y, x2, y2, w, h %s", (x, y, x2, y2, w, h))
             good_x = rw // 2 - w // 2
             good_y = rh // 2 - h // 2
-            log.debug("centering canvas %s", (good_x - x, good_y - y))
             # canvas.move(canvas.image_ref, -x + canvas.winfo_width() // 2, -y + canvas.winfo_height() // 2)
             canvas.move(canvas.image_ref, good_x - x, good_y - y)
         except TypeError as ex:
@@ -492,7 +508,7 @@ def im_show(im):
         f" @ {'%sx%s' % im.size} {paths[path_index]}"
     )
     root.title(msg + " - " + TITLE)
-    INFO_OVERLAY.configure(text=msg + "\n" + info_get())
+    info_set(msg + "\n" + info_get())
     scrollbars_set()
 
 
@@ -518,9 +534,10 @@ def scrollbars_set():
     """Hide/show scrollbars."""
     global OLD_INDEX
     try:
-        x, y, x2, y2 = canvas.bbox(canvas.image_ref)
+        x, y, x2, y2 = canvas.bbox(canvas.image_ref, canvas_info)
         w = x2 - x
         h = y2 - y
+        log.debug("Fitting %s", (w, h, canvas.bbox(canvas_info)))
         sv = max(0, y) + h > root.winfo_height()
         # Vertical scrollbar causing horizontal scrollbar.
         sh = max(0, x) + w > root.winfo_width() - 16 * sv
@@ -563,24 +580,22 @@ MIME type: {IMAGE.get_format_mimetype()}"""  # type: ignore
 
     icc = IMAGE.info.get("icc_profile")
     if icc:
-        icc_str = str(icc).replace("\x00", "")
         p = ImageCms.ImageCmsProfile(BytesIO(icc))
         intent = ImageCms.getDefaultIntent(p)
         man = ImageCms.getProfileManufacturer(p).strip()
         model = ImageCms.getProfileModel(p).strip()
         msg += f"""
 
-International Color Consortium Profile:
-Copyright: {ImageCms.getProfileCopyright(p).strip()}
-Description: {ImageCms.getProfileDescription(p).strip()}
-Intent: {('Perceptual', 'Relative colorimetric', 'Saturation', 'Absolute colorimetric')[intent]}
-isIntentSupported: {ImageCms.isIntentSupported(p, intent, 1)}
-Raw: {icc_str}
+ICC Profile:
+-Copyright: {ImageCms.getProfileCopyright(p).strip()}
+-Description: {ImageCms.getProfileDescription(p).strip()}
+-Intent: {('Perceptual', 'Relative colorimetric', 'Saturation', 'Absolute colorimetric')[intent]}
+-isIntentSupported: {ImageCms.isIntentSupported(p, intent, 1)}
 """
         if man:
-            msg += f"Manufacturer: {man}"
+            msg += f"-Manufacturer: {man}"
         if model:
-            msg += f"Model: {model}"
+            msg += f"-Model: {model}"
 
     # Image File Directories (IFD)
     if hasattr(IMAGE, "tag_v2"):
@@ -595,7 +610,7 @@ Raw: {icc_str}
             msg += "\n\nEXIF:"
             for key, val in exif.items():
                 if isinstance(val, bytes):
-                    val = val.decode("utf_16_le")
+                    val = val.decode("utf_16_be")
                     log.debug(
                         "==========================================================\nDecoded %s",
                         val,
@@ -627,10 +642,12 @@ def info_toggle(event=None):
     global SHOW_INFO
     SHOW_INFO = not SHOW_INFO
     if SHOW_INFO:
-        INFO_OVERLAY.lift()
-        log.debug("Showing info:\n%s", INFO_OVERLAY["text"])
+        canvas.lift(canvas.overlay)
+        canvas.lift(canvas_info)
+        log.debug("Showing info:\n%s", canvas.itemcget(canvas_info, "text"))
     else:
-        INFO_OVERLAY.lower()
+        canvas.lower(canvas.overlay)
+        canvas.lower(canvas_info)
 
 
 @log_this
@@ -722,7 +739,7 @@ def path_save(event=None):
                 **IMAGE.info,
                 lossless=True,
                 optimize=True,
-                save_all=True,  # All frames.
+                save_all=hasattr(IMAGE, "n_frames"),  # All frames.
             )
             paths_update()
             toast(f"Saved {filename}")
@@ -730,6 +747,7 @@ def path_save(event=None):
             msg = f"Failed to save as {filename}. {ex}"
             log.error(msg)
             toast(msg, 4000, "red")
+            raise
 
 
 def paths_sort(path=None):
@@ -806,10 +824,11 @@ def resize_handler(event=None):
             canvas.coords(lines[1], 0, h, 0, 0, w, h, w, 0)
     if WINDOW_SIZE != new_size:
         log.debug("%s", f"Resizing window, {WINDOW_SIZE} -> {new_size}")
-        log.debug(INFO_OVERLAY.winfo_geometry())
         ERROR_OVERLAY.config(wraplength=event.width)
-        INFO_OVERLAY.config(wraplength=event.width)
-        STATUS_OVERLAY.config(wraplength=event.width)
+        TOAST.config(wraplength=event.width)
+        canvas.itemconfig(canvas_info, width=event.width - 16)
+        info_update()
+
         if WINDOW_SIZE and FIT:
             im_resize()
         else:
@@ -878,9 +897,9 @@ def slideshow_toggle(event=None):
 
 def toast(msg: str, ms: int = 2000, fg="#00FF00"):
     """Temporarily show a status message."""
-    STATUS_OVERLAY.config(text=msg, fg=fg)
-    STATUS_OVERLAY.lift()
-    root.after(ms, STATUS_OVERLAY.lower)
+    TOAST.config(text=msg, fg=fg)
+    TOAST.lift()
+    root.after(ms, TOAST.lower)
 
 
 @log_this
@@ -973,8 +992,7 @@ def zoom_text(event):
     log.info("Text scale: %s New font size: %s", SCALE_TEXT, new_font_size)
 
     ERROR_OVERLAY.config(font=("Consolas", new_font_size))
-    INFO_OVERLAY.config(font=("Consolas", new_font_size))
-    STATUS_OVERLAY.config(font=("Consolas", new_font_size * 2))
+    TOAST.config(font=("Consolas", new_font_size * 2))
 
 
 root = TkinterDnD.Tk()  # notice - use this instead of tk.Tk()
@@ -990,7 +1008,7 @@ root.geometry(geometry)
 
 SLIDESHOW_ON = False
 SLIDESHOW_PAUSE = 4000
-STATUS_OVERLAY = tkinter.Label(
+TOAST = tkinter.Label(
     root,
     text="status",
     font=("Consolas", FONT_SIZE * 2),
@@ -1000,22 +1018,22 @@ STATUS_OVERLAY = tkinter.Label(
     anchor="center",
     justify="center",
 )
-STATUS_OVERLAY.place(x=0, y=0)
-INFO_OVERLAY = tkinter.Label(
-    root,
-    text="status",
-    font=("Consolas", FONT_SIZE),
-    fg="yellow",
-    bg="black",
-    wraplength=root_w,
-    anchor="nw",
-    justify="left",
-)
-INFO_OVERLAY.place(x=0, y=0)
+TOAST.place(x=0, y=0)
 
 canvas = tkinter.Canvas(borderwidth=0, highlightthickness=0, relief="flat")
 canvas.place(x=0, y=0, relwidth=1, relheight=1)
 canvas.image_ref = canvas.create_image(root_w // 2, root_h // 2, anchor="center")  # type: ignore
+canvas.overlay = canvas.create_image(0, 0, anchor="nw")  # type: ignore
+canvas_info = canvas.create_text(
+    1,  # If 0, bbox starts at -1.
+    0,
+    anchor="nw",
+    text="status",
+    fill="#ff0",
+    font=("Consolas", FONT_SIZE),
+    width=root_w,
+)
+
 scrollx = tkinter.Scrollbar(root, orient="horizontal", command=canvas.xview)
 scrollx.place(x=0, y=1, relwidth=1, relx=1, rely=1, anchor="se")
 scrolly = tkinter.Scrollbar(root, command=canvas.yview)
