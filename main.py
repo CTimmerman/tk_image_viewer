@@ -14,8 +14,8 @@ from io import BytesIO
 from tkinter import filedialog, messagebox
 
 from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
-import pillow_avif  # type: ignore  # Patches PIL.Image
-import pillow_jxl
+import pillow_avif  # type: ignore  # noqa: F401  # pylint: disable=E0401
+import pillow_jxl  # noqa: F401
 from PIL import ExifTags, Image, ImageCms, ImageGrab, ImageTk, IptcImagePlugin, TiffTags
 from PIL.Image import Transpose
 from pillow_heif import register_heif_opener  # type: ignore
@@ -114,17 +114,17 @@ def browse(event=None):
         new_index = ZIP_INDEX
 
     k = event.keysym if event else "Next"
-    # if k == "Next":
-    if event.num == 4 or event.delta > 0:
-        k = "Up"
-
     if k in ("1", "Home"):
         new_index = 0
     elif k == "End":
         new_index = path_index - 1
     elif k == "x":
         new_index = random.randint(0, len(paths) - 1)
-    elif k in ("Left", "Up", "Button-4", "BackSpace"):
+    elif (
+        k in ("Left", "Up", "Button-4", "BackSpace")
+        or event.num == 4
+        or event.delta > 0
+    ):
         new_index -= 1
     else:
         new_index += 1
@@ -496,6 +496,11 @@ def im_show(im):
     scrollbars_set()
 
 
+def natural_sort(s):
+    """Sort by number and string."""
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", str(s))]
+
+
 def scroll(event):
     """Scroll."""
     k = event.keysym
@@ -743,12 +748,7 @@ def paths_sort(path=None):
 
     for s in SORT.split(","):
         if s == "natural":
-            paths.sort(
-                key=lambda s: [
-                    int(t) if t.isdigit() else t.lower()
-                    for t in re.split(r"(\d+)", str(s))
-                ]
-            )
+            paths.sort(key=natural_sort)
         elif s == "ctime":
             paths.sort(key=os.path.getmtime)
         elif s == "mtime":
@@ -1015,7 +1015,6 @@ INFO_OVERLAY.place(x=0, y=0)
 
 canvas = tkinter.Canvas(borderwidth=0, highlightthickness=0, relief="flat")
 canvas.place(x=0, y=0, relwidth=1, relheight=1)
-# canvas.image_ref = canvas.create_image(0, 0, anchor="nw")  # type: ignore
 canvas.image_ref = canvas.create_image(root_w // 2, root_h // 2, anchor="center")  # type: ignore
 scrollx = tkinter.Scrollbar(root, orient="horizontal", command=canvas.xview)
 scrollx.place(x=0, y=1, relwidth=1, relx=1, rely=1, anchor="se")
