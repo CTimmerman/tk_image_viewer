@@ -1125,7 +1125,12 @@ scrollx = tkinter.Scrollbar(root, orient="horizontal", command=canvas.xview)
 scrollx.place(x=0, y=1, relwidth=1, relx=1, rely=1, anchor="se")
 scrolly = tkinter.Scrollbar(root, command=canvas.yview)
 scrolly.place(x=1, y=0, relheight=1, relx=1, rely=1, anchor="se")
-canvas.config(xscrollcommand=scrollx.set, yscrollcommand=scrolly.set)
+canvas.config(
+    xscrollcommand=scrollx.set,
+    xscrollincrement=1,
+    yscrollcommand=scrolly.set,
+    yscrollincrement=1,
+)
 ERROR_OVERLAY = tkinter.Label(
     root,
     compound="center",
