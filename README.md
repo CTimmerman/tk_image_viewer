@@ -31,8 +31,7 @@ Binds:
 Escape q - Close fullscreen or app.
 F1 h - Show help.
 F11 Return f - Toggle fullscreen.
-Left Right Up Down Key-1 x - Next/previous file.
-MouseWheel Button-4 Button-5 - Next/Previous file.
+Left Right Up Down BackSpace space MouseWheel Button-4 Button-5 Home End Key-1 x - Browse.
 p - Pick a file to open.
 s - Save file as.
 Delete - Delete file. Bypasses Trash.
@@ -46,6 +45,7 @@ Alt-MouseWheel Alt-minus Alt-plus Alt-equal - Zoom text.
 r - Resize type to fit window.
 a - Toggle animation.
 Pause - Toggle slideshow.
+l - Toggle line overlay.
 t Shift-t - Transpose image.
 i - Toggle info overlay.
 Ctrl-c - Copy info to clipboard while app is running.
