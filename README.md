@@ -32,6 +32,7 @@ Escape q - Close fullscreen or app.
 F1 h - Show help.
 F11 Return f - Toggle fullscreen.
 Left Right Up Down BackSpace space MouseWheel Button-4 Button-5 Home End Key-1 x - Browse.
+comma period - Browse animation frames.
 p - Pick a file to open.
 s - Save file as.
 Delete - Delete file. Bypasses Trash.

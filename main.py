@@ -1,4 +1,4 @@
-# pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, too-many-boolean-expressions, too-many-branches, too-many-lines, too-many-locals, unused-argument, unused-import
+# pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, too-many-boolean-expressions, too-many-branches, too-many-lines, too-many-locals, too-many-nested-blocks,too-many-statements, unused-argument, unused-import
 """Tk Image Viewer
 by Cees Timmerman
 2024-03-17 First version.
@@ -167,6 +167,30 @@ def browse(event=None):
 
 
 @log_this
+def browse_frame(event=None):
+    """Browse animation frames."""
+    if not hasattr(IMAGE, "n_frames"):
+        toast("No frames.")
+        return
+    global IM_FRAME
+
+    n = IMAGE.n_frames - 1
+    k = event.keysym
+    if k == "comma":
+        IM_FRAME -= 1
+        if IM_FRAME < 0:
+            IM_FRAME = n
+    else:
+        IM_FRAME += 1
+        if IM_FRAME > n:
+            IM_FRAME = 0
+
+    IMAGE.seek(IM_FRAME)
+    im_resize()
+    toast(f"Frame {1 + IM_FRAME}/{1 + n}", 1000)
+
+
+@log_this
 def clipboard_copy(event):
     """Copy info to clipboard while app is running."""
     root.clipboard_clear()
@@ -211,6 +235,7 @@ def close(event=None):
         event.widget.quit()
 
 
+@log_this
 def debug_keys(event=None):
     """Show all keys."""
 
@@ -263,18 +288,18 @@ def help_handler(event=None):
         )
         log.debug(msg)
         info_set(msg)
-        canvas.lift(canvas.overlay)
+        info_show()
     else:
-        canvas.lower(canvas.overlay)
+        info_hide()
 
 
 def info_set(msg: str):
     """Change info text."""
     canvas.itemconfig(canvas_info, text=msg)  # type: ignore
-    info_update()
+    info_bg_update()
 
 
-def info_update():
+def info_bg_update():
     """Update info overlay."""
     x1, y1, x2, y2 = canvas.bbox(canvas_info)
     canvas.overlay_tkim = ImageTk.PhotoImage(  # type: ignore
@@ -696,13 +721,31 @@ ICC Profile:
             msg += "\n\nEXIF:"
             for key, val in exif.items():
                 if isinstance(val, bytes):
-                    val = val.decode("utf_16_be")
+                    # val = val.decode("utf_16_le")
                     log.debug(
                         "==========================================================\nDecoded %s",
-                        val,
+                        (val.decode("utf_16_le"), val),
                     )
                 if key in ExifTags.TAGS:
                     msg += f"\n{ExifTags.TAGS[key]}: {val}"
+                    if ExifTags.TAGS[key] == "Orientation":
+                        msg += " "
+                        if val == 1:
+                            msg += "Normal"
+                        elif val == 2:
+                            msg += "FLIP_LEFT_RIGHT"
+                        elif val == 3:
+                            msg += "ROTATE_180"
+                        elif val == 4:
+                            msg += "FLIP_TOP_BOTTOM"
+                        elif val == 5:
+                            msg += "TRANSPOSE"
+                        elif val == 6:
+                            msg += "ROTATE_90"
+                        elif val == 7:
+                            msg += "TRANSVERSE"
+                        elif val == 8:
+                            msg += "ROTATE_270"
                 else:
                     msg += f"\nUnknown EXIF tag {key}: {val}"
 
@@ -728,12 +771,22 @@ def info_toggle(event=None):
     global SHOW_INFO
     SHOW_INFO = not SHOW_INFO
     if SHOW_INFO:
-        canvas.lift(canvas.overlay)
-        canvas.lift(canvas_info)
         log.debug("Showing info:\n%s", canvas.itemcget(canvas_info, "text"))
+        info_show()
     else:
-        canvas.lower(canvas.overlay)
-        canvas.lower(canvas_info)
+        info_hide()
+
+
+def info_show():
+    """Show info overlay."""
+    canvas.lift(canvas.overlay)
+    canvas.lift(canvas_info)
+
+
+def info_hide():
+    """Hide info overlay."""
+    canvas.lower(canvas.overlay)
+    canvas.lower(canvas_info)
 
 
 @log_this
@@ -900,6 +953,7 @@ def resize_handler(event=None):
     """Handle Tk resize event."""
     global WINDOW_SIZE
     new_size = root.winfo_geometry().split("+", maxsplit=1)[0]
+
     if lines_on:
         w = root.winfo_width() - 1
         h = root.winfo_height() - 1
@@ -909,13 +963,16 @@ def resize_handler(event=None):
         else:
             canvas.coords(lines[0], 0, 0, w, 0, 0, h, w, h)
             canvas.coords(lines[1], 0, h, 0, 0, w, h, w, 0)
+
     if WINDOW_SIZE != new_size:
         ERROR_OVERLAY.config(wraplength=event.width)
         TOAST.config(wraplength=event.width)
         bb = canvas.bbox(canvas_info)
         canvas.itemconfig(canvas_info, width=event.width - 16)
+        canvas.coords(canvas.im_bg, 0, 0, event.width, event.height)
+
         if bb != canvas.bbox(canvas_info):
-            info_update()
+            info_bg_update()
 
         if WINDOW_SIZE and FIT:
             im_resize()
@@ -934,6 +991,7 @@ def set_bg(event=None):
     bg = BG_COLORS[BG_INDEX]
     root.config(bg=bg)
     canvas.config(bg=bg)
+    canvas.itemconfig(canvas.im_bg, fill=bg)
     ERROR_OVERLAY.config(bg=bg)
 
 
@@ -987,7 +1045,9 @@ def toast(msg: str, ms: int = 2000, fg="#00FF00"):
     """Temporarily show a status message."""
     TOAST.config(text=msg, fg=fg)
     TOAST.lift()
-    root.after(ms, TOAST.lower)
+    if hasattr(root, "toast_timer"):
+        root.after_cancel(root.toast_timer)
+    root.toast_timer = root.after(ms, TOAST.lower)
 
 
 @log_this
@@ -1002,6 +1062,8 @@ def transpose_set(event=None):
 
     if TRANSPOSE_INDEX >= 0:
         toast(f"Transpose: {Transpose(TRANSPOSE_INDEX).name}")
+    else:
+        toast("Transpose: Normal")
     im_resize()
 
 
@@ -1075,14 +1137,16 @@ def zoom_text(event):
     SCALE_TEXT = max(0.1, min(SCALE_TEXT, 20))
     new_font_size = int(FONT_SIZE * SCALE_TEXT)
     new_font_size = max(1, min(new_font_size, 200))
-
     log.info("Text scale: %s New font size: %s", SCALE_TEXT, new_font_size)
 
     ERROR_OVERLAY.config(font=("Consolas", new_font_size))
     TOAST.config(font=("Consolas", new_font_size * 2))
+    canvas.itemconfig(canvas_info, font=("Consolas", new_font_size))
+    info_bg_update()
 
 
 root = TkinterDnD.Tk()  # notice - use this instead of tk.Tk()
+root.config(bg="green")
 root.drop_target_register(DND_FILES)
 root.dnd_bind("<<Drop>>", drop_handler)
 
@@ -1107,9 +1171,8 @@ TOAST = tkinter.Label(
 )
 TOAST.place(x=0, y=0)
 
-canvas = tkinter.Canvas(borderwidth=0, highlightthickness=0, relief="flat")
+canvas = tkinter.Canvas(bg="blue", borderwidth=0, highlightthickness=0, relief="flat")
 canvas.place(x=0, y=0, relwidth=1, relheight=1)
-canvas.image_ref = canvas.create_image(root_w // 2, root_h // 2, anchor="center")  # type: ignore
 canvas.overlay = canvas.create_image(0, 0, anchor="nw")  # type: ignore
 canvas_info = canvas.create_text(
     1,  # If 0, bbox starts at -1.
@@ -1120,7 +1183,9 @@ canvas_info = canvas.create_text(
     font=("Consolas", FONT_SIZE),
     width=root_w,
 )
-
+canvas.im_bg = canvas.create_rectangle(0, 0, root_w, root_h, fill="black")  # type: ignore
+canvas.image_ref = canvas.create_image(root_w // 2, root_h // 2, anchor="center")  # type: ignore
+root.update()
 scrollx = tkinter.Scrollbar(root, orient="horizontal", command=canvas.xview)
 scrollx.place(x=0, y=1, relwidth=1, relx=1, rely=1, anchor="se")
 scrolly = tkinter.Scrollbar(root, command=canvas.yview)
@@ -1152,6 +1217,7 @@ binds = [
         browse,
         "Left Right Up Down BackSpace space MouseWheel Button-4 Button-5 Home End Key-1 x",
     ),
+    (browse_frame, "comma period"),
     (path_open, "p"),
     (path_save, "s"),
     (delete_file, "Delete"),
