@@ -1105,9 +1105,9 @@ def zoom(event):
     """Zoom."""
     global SCALE
     k = event.keysym if event else "plus"
-    if event.num == 5 or event.delta < 0:
+    if event.num == 5 or event.delta > 0:
         k = "plus"
-    if event.num == 4 or event.delta > 0:
+    if event.num == 4 or event.delta < 0:
         k = "minus"
     if k in ("plus", "equal"):
         SCALE *= 1.1
@@ -1124,9 +1124,9 @@ def zoom_text(event):
     """Zoom text."""
     global SCALE_TEXT
     k = event.keysym if event else "plus"
-    if event.num == 5 or event.delta < 0:
+    if event.num == 5 or event.delta > 0:
         k = "plus"
-    if event.num == 4 or event.delta > 0:
+    if event.num == 4 or event.delta < 0:
         k = "minus"
     if k in ("plus", "equal"):
         SCALE_TEXT *= 1.1
