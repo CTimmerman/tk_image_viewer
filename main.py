@@ -9,10 +9,9 @@ by Cees Timmerman
 2024-04-08 Scroll/drag.
 2024-04-10 AVIF, JXL, some SVG support.
 """
-import base64, enum, functools, logging, os, pathlib, random, re, time, tkinter, zipfile  # noqa: E401
+import base64, enum, functools, gzip, logging, os, pathlib, random, re, time, tkinter, zipfile  # noqa: E401
 from io import BytesIO
 from tkinter import filedialog, messagebox
-import traceback
 
 from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
 import pillow_avif  # type: ignore  # noqa: F401  # pylint: disable=E0401
@@ -21,8 +20,6 @@ from PIL import (
     ExifTags,
     Image,
     ImageCms,
-    ImageColor,
-    ImageDraw,
     ImageGrab,
     ImageTk,
     IptcImagePlugin,
@@ -31,11 +28,8 @@ from PIL import (
 from PIL.Image import Transpose
 from pillow_heif import register_heif_opener  # type: ignore
 
-
-# For libcairo
-# os.environ["PATH"] = os.pathsep.join((".", os.environ["PATH"]))
-
-from svgpathtools import svg2paths2, wsvg, Line  # type: ignore
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
+import pygame  # pylint: disable=wrong-import-position
 
 
 class Fits(enum.IntEnum):
@@ -372,69 +366,47 @@ def load_mhtml(path):
 def load_svg(fpath):
     """Load an SVG file."""
     global IMAGE
+    if fpath.suffix == ".svgz":
+        with gzip.open(fpath, "rt", encoding="utf8") as f:
+            data = f.read()
+    else:
+        with open(fpath, "r", encoding="utf8") as fp:
+            data = fp.read()
 
-    svgpaths, attributes, svg_attributes = svg2paths2(fpath)
-    print(
-        "SVG PATHS\n",
-        "\n".join(str(p) for p in svgpaths),
-        "\nPATH ATTRS\n",
-        "\n".join(str(s) for s in attributes),
-        "\nSVG ATTRS\n",
-        svg_attributes,
-    )
-    w, h = svg_attributes["viewBox"].split()[2:]
-    IMAGE = Image.new("RGBA", (int(float(w)), int(float(h))), (100, 100, 100, 100))
-    print(IMAGE, IMAGE.size)
-    IMAGE.format = "SVG"
-    ctx = ImageDraw.Draw(IMAGE)
+    size = None
     try:
-        for i, path in enumerate(svgpaths):
-            attrs = attributes[i]
-            opacity = 1.0
-            fill = "red"
-            if "fill" in attrs:
-                fill = attrs["fill"]
-            elif "style" in attrs:
-                style = attributes[i]["style"]
-                fill = re.findall(r"fill:\s*([#0-9a-zA-Z]+)", style)
-                if fill:
-                    fill = fill[0]
-                stroke = re.findall(r"stroke:\s*([#0-9a-zA-Z]+)", style)
-                if stroke:
-                    fill = stroke[0]
-                if "opacity" in style:
-                    opacity = float(re.findall(r"opacity:\s*([.0-9]+)", style)[0])
+        size = [
+            round(float(v))
+            for v in re.split(
+                "[, ]+",
+                re.findall(
+                    r'viewbox\s*=\s*"([, 0-9.]+)"', data, re.DOTALL | re.IGNORECASE
+                )[0],
+            )
+        ][2:]
+    except IndexError:
+        pass
+    try:
+        size = [
+            round(
+                float(re.findall(rf'<svg [^>]*?{k}\s*=\s*"([0-9.]+)"[^>]*>', data)[0])
+            )
+            for k in ("width", "height")
+        ]
+    except IndexError:
+        pass
+    if size:
+        r = get_fit_ratio(*size)
+        data = re.sub(
+            "<svg([^>]+)>",
+            f'<svg \\1 width="{size[0]*r}" height="{size[1]*r}" transform="scale({r})">',
+            data,
+        )
 
-            try:
-                color = (
-                    ImageColor.getcolor(
-                        (
-                            "black"
-                            if fill == "none"
-                            else "white" if "url" in fill else fill
-                        ),
-                        "RGB",
-                    )
-                    if fill
-                    else (255, 0, 0)
-                )
-            except ValueError as ex:
-                log.error(ex)
-                color = (255, 0, 0)
-
-            if opacity:
-                color = (*color, int(opacity * 255))
-            print("COLOR", color, "FILL", fill)
-            for el in path:
-                log.debug("Drawing %s", (el, color))
-                if isinstance(el, Line):
-                    xy = (int(el.start.real), int(el.start.imag))
-                    xy2 = (int(el.end.real), int(el.end.imag))
-                    ctx.line(xy=(xy, xy2), fill=color, width=1)
-                # ctx.polygon(path, fill=fill[0] if fill else 'red')  #, outline=None)
-    except Exception as ex:  # pylint: disable=W0718
-        print("SVG ERROR")
-        traceback.print_exception(ex)
+    surface = pygame.image.load(BytesIO(data.encode()))
+    bf = BytesIO()
+    pygame.image.save(surface, bf)
+    IMAGE = Image.open(bf)
 
 
 def load_zip(path):
@@ -466,7 +438,7 @@ def im_load(path=None):
             set_stats(path)
             if path.suffix == ".zip":
                 load_zip(path)
-            elif path.suffix == ".svg":
+            elif path.suffix in (".svg", ".svgz"):
                 load_svg(path)
             elif path.suffix in (".eml", ".mht", ".mhtml"):
                 load_mhtml(path)
@@ -495,7 +467,7 @@ def im_load(path=None):
         OSError,  # NOSONAR
         BaseException,  # NOSONAR  # https://github.com/PyO3/pyo3/issues/3519
     ) as ex:
-        err_msg = f"{type(ex)} {ex}"
+        err_msg = f"im_load {type(ex).__name__}: {ex}"
         IMAGE = None
         msg = f"{msg} {err_msg} {path}"
         error_show(msg)
@@ -503,12 +475,11 @@ def im_load(path=None):
         root.title(msg + " - " + TITLE)
 
 
-def get_fit_ratio():
+def get_fit_ratio(im_w, im_h):
     """Get fit ratio."""
     ratio = 1.0
     w = root.winfo_width()
     h = root.winfo_height()
-    im_w, im_h = IMAGE.size
     if (
         ((FIT == Fits.ALL) and (im_w != w or im_h != h))
         or ((FIT == Fits.BIG) and (im_w > w or im_h > h))
@@ -520,9 +491,9 @@ def get_fit_ratio():
 
 def im_fit(im):
     """Fit image to window."""
-    ratio = get_fit_ratio()
+    w, h = im.size
+    ratio = get_fit_ratio(w, h)
     if ratio != 1.0:  # NOSONAR
-        w, h = im.size
         im = im.resize((int(w * ratio), int(h * ratio)), QUALITY)
     return im
 
@@ -532,7 +503,7 @@ def im_scale(im):
     global SCALE
     log.debug("Scaling to %s", SCALE)
     im_w, im_h = im.size
-    ratio = SCALE * get_fit_ratio()
+    ratio = SCALE * get_fit_ratio(im_w, im_h)
     try:
         new_w = int(ratio * im_w)
         new_h = int(ratio * im_h)
@@ -789,7 +760,6 @@ def info_hide():
     canvas.lower(canvas_info)
 
 
-@log_this
 def drag_start(e):
     """Keep start pos for delta move."""
     canvas.dragx = e.x
@@ -803,7 +773,6 @@ def drag(e):
     x, y, x2, y2 = canvas.bbox(canvas.image_ref)
     w = x2 - x
     h = y2 - y
-    log.debug("Draggin image: %s", (x, y, x2, y2, w, h))
     dx, dy = e.x - canvas.dragx, e.y - canvas.dragy
     # Keep at least a corner in view.
     # Goes entirely out of view when switching to smaller imag!
@@ -827,10 +796,11 @@ def set_supported_files():
     """Set supported files. TODO: Distinguish between openable and saveable."""
     global SUPPORTED_FILES
     exts = Image.registered_extensions()
-    exts[".eml"] = "EML"
-    exts[".mht"] = "MHT"
+    exts[".eml"] = "MHTML"
+    exts[".mht"] = "MHTML"
     exts[".mhtml"] = "MHTML"
     exts[".svg"] = "SVG"
+    exts[".svgz"] = "SVG"
     exts[".zip"] = "ZIP"
 
     type_exts = {}
@@ -1101,6 +1071,12 @@ def fullscreen_toggle(event=None):
     # root.attributes("-fullscreen", not root.attributes("-fullscreen"))
 
 
+def str2float(s: str) -> float:
+    """Python lacks a parse function for "13px"."""
+    m = re.match("\\d+", s)
+    return float(m.group(0)) if m else 0.0
+
+
 def zoom(event):
     """Zoom."""
     global SCALE
@@ -1208,7 +1184,7 @@ ERROR_OVERLAY = tkinter.Label(
 ERROR_OVERLAY.place(x=0, y=0, relwidth=1, relheight=1)
 set_bg()
 
-root.bind_all("<Key>", debug_keys)
+# root.bind_all("<Key>", debug_keys)
 binds = [
     (close, "Escape q"),
     (help_handler, "F1 h"),

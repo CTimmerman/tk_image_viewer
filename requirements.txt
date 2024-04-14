@@ -2,5 +2,6 @@ pillow
 pillow-avif-plugin
 pillow-heif
 pillow-jxl-plugin
-svgpathtools
+pygame
+pyperclip
 tkinterdnd2
