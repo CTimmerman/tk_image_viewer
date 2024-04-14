@@ -354,8 +354,8 @@ def load_mhtml(path):
         new_parts.append(data)
     data = new_parts[ZIP_INDEX]
     try:
-        im_file = BytesIO(base64.standard_b64decode(data.rstrip()))
-        IMAGE = Image.open(im_file)
+        with BytesIO(base64.standard_b64decode(data.rstrip())) as im_file:
+            IMAGE = Image.open(im_file.getvalue())
     except ValueError as ex:
         log.error("Failed to split mhtml: %s", ex)
         log.error("DATA %r", data[:180])
@@ -403,10 +403,11 @@ def load_svg(fpath):
             data,
         )
 
-    surface = pygame.image.load(BytesIO(data.encode()))
-    bf = BytesIO()
-    pygame.image.save(surface, bf)
-    IMAGE = Image.open(bf)
+    with BytesIO(data.encode()) as surface_data:
+        surface = pygame.image.load(surface_data.getvalue())
+    with BytesIO() as bf:
+        pygame.image.save(surface, bf)
+        IMAGE = Image.open(bf.getvalue())
 
 
 def load_zip(path):
@@ -662,7 +663,8 @@ def info_get() -> str:
         pass
     icc = IMAGE.info.get("icc_profile")
     if icc:
-        p = ImageCms.ImageCmsProfile(BytesIO(icc))
+        with BytesIO(icc) as icc_bytes:
+            p = ImageCms.ImageCmsProfile(icc_bytes.getvalue())
         intent = ImageCms.getDefaultIntent(p)
         man = ImageCms.getProfileManufacturer(p).strip()
         model = ImageCms.getProfileModel(p).strip()
