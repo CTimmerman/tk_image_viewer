@@ -7,7 +7,7 @@ by Cees Timmerman
 2024-03-27 Set sort order. Support EML, MHT, MHTML.
 2024-03-30 Copy info + paste/drop picture(s)/paths.
 2024-04-08 Scroll/drag.
-2024-04-10 AVIF, JXL, some SVG support.
+2024-04-10 AVIF, JXL, SVG support.
 """
 import base64, enum, functools, gzip, logging, os, pathlib, random, re, time, tkinter, zipfile  # noqa: E401
 from io import BytesIO
@@ -185,7 +185,7 @@ def browse_frame(event=None):
 
 
 @log_this
-def clipboard_copy(event):
+def clipboard_copy(event=None):
     """Copy info to clipboard while app is running."""
     root.clipboard_clear()
     root.clipboard_append(
@@ -194,7 +194,7 @@ def clipboard_copy(event):
 
 
 @log_this
-def clipboard_paste(event):
+def clipboard_paste(event=None):
     """Paste image from clipboard."""
     global IMAGE, INFO, path_index, paths
     im = ImageGrab.grabclipboard()
@@ -225,8 +225,7 @@ def close(event=None):
     if root.overrideredirect():
         fullscreen_toggle()
     else:
-        event.widget.withdraw()
-        event.widget.quit()
+        root.quit()
 
 
 @log_this
@@ -271,12 +270,12 @@ def error_show(msg: str):
 
 
 def help_handler(event=None):
-    """Show help."""
+    """Toggle help."""
     global SHOW_INFO
     SHOW_INFO = not SHOW_INFO
     if SHOW_INFO:
         msg = "\n".join(
-            f"{keys.replace('Control', 'Ctrl')} - {fun.__doc__}"
+            f"{keys.replace('Control', 'Ctrl')} - {fun.__doc__.replace('...', '')}"
             for fun, keys in binds
             if "Configure" not in keys and "ButtonPress" not in keys
         )
@@ -302,7 +301,7 @@ def info_bg_update():
     canvas.itemconfig(canvas.overlay, image=canvas.overlay_tkim)  # type: ignore
 
 
-def lines_toggle(event):
+def lines_toggle(event=None):
     """Toggle line overlay."""
     global lines, lines_on
     if lines:
@@ -820,7 +819,7 @@ set_supported_files()
 
 @log_this
 def path_open(event=None):
-    """Pick a file to open."""
+    """Pick a file to open...."""
     filename = filedialog.askopenfilename(filetypes=SUPPORTED_FILES)
     if filename:
         paths_update(None, filename)
@@ -828,7 +827,7 @@ def path_open(event=None):
 
 @log_this
 def path_save(event=None):
-    """Save file as."""
+    """Save file as...."""
     if "Names" in INFO:
         p = pathlib.Path(str(paths[path_index]) + "." + INFO["Names"][ZIP_INDEX])
     else:
@@ -1024,7 +1023,7 @@ def toast(msg: str, ms: int = 2000, fg="#00FF00"):
 def transpose_set(event=None):
     """Transpose image."""
     global TRANSPOSE_INDEX
-    TRANSPOSE_INDEX += -1 if event.keysym == "T" else 1
+    TRANSPOSE_INDEX += -1 if event and event.keysym == "T" else 1
     if TRANSPOSE_INDEX >= len(Transpose):
         TRANSPOSE_INDEX = -1
     if TRANSPOSE_INDEX < -1:
@@ -1038,7 +1037,7 @@ def transpose_set(event=None):
 
 
 @log_this
-def fit_handler(event):
+def fit_handler(event=None):
     """Resize type to fit window."""
     global FIT
     FIT = (FIT + 1) % len(Fits)
@@ -1080,7 +1079,7 @@ def str2float(s: str) -> float:
 def zoom(event):
     """Zoom."""
     global SCALE
-    k = event.keysym if event else "plus"
+    k = event.keysym
     if event.num == 5 or event.delta > 0:
         k = "plus"
     if event.num == 4 or event.delta < 0:
@@ -1099,7 +1098,7 @@ def zoom(event):
 def zoom_text(event):
     """Zoom text."""
     global SCALE_TEXT
-    k = event.keysym if event else "plus"
+    k = event.keysym
     if event.num == 5 or event.delta > 0:
         k = "plus"
     if event.num == 4 or event.delta < 0:
@@ -1184,30 +1183,37 @@ ERROR_OVERLAY = tkinter.Label(
 ERROR_OVERLAY.place(x=0, y=0, relwidth=1, relheight=1)
 set_bg()
 
+
+def menu_show(event):
+    """Show menu."""
+    menu.post(event.x_root, event.y_root)
+
+
 # root.bind_all("<Key>", debug_keys)
 binds = [
-    (close, "Escape q"),
-    (help_handler, "F1 h"),
-    (fullscreen_toggle, "F11 Return f"),
+    (close, "q Escape"),
+    (help_handler, "h F1"),
+    (fullscreen_toggle, "f F11 Return"),
     (
         browse,
-        "Left Right Up Down BackSpace space MouseWheel Button-4 Button-5 Home End Key-1 x",
+        "x Left Right Up Down BackSpace space MouseWheel Button-4 Button-5 Home End Key-1",
     ),
     (browse_frame, "comma period"),
     (path_open, "p"),
     (path_save, "s"),
-    (delete_file, "Delete"),
-    (paths_update, "F5 u"),
+    (delete_file, "d Delete"),
+    (paths_update, "u F5"),
     (set_order, "o"),
-    (set_bg, "b c"),
+    (set_bg, "c"),
     (drag_start, "ButtonPress"),
-    (drag, "B1-Motion B2-Motion B3-Motion"),
+    (menu_show, "Button-3"),  # Or rather tk_popup in Ubuntu?
+    (drag, "B1-Motion B2-Motion"),
     (scroll, "Control-Left Control-Right Control-Up Control-Down"),
     (zoom, "Control-MouseWheel minus plus equal 0"),
     (zoom_text, "Alt-MouseWheel Alt-minus Alt-plus Alt-equal"),
     (fit_handler, "r"),
     (animation_toggle, "a"),
-    (slideshow_toggle, "Pause"),
+    (slideshow_toggle, "b Pause"),
     (lines_toggle, "l"),
     (transpose_set, "t Shift-t"),
     (info_toggle, "i"),
@@ -1216,6 +1222,8 @@ binds = [
     (set_verbosity, "v"),
     (resize_handler, "Configure"),
 ]
+
+menu = tkinter.Menu(root, tearoff=0)
 
 
 def main(args):
@@ -1263,6 +1271,25 @@ def main(args):
         func = b[0]
         for event in b[1].split(" "):
             root.bind(f"<{event}>", func)
+
+    for fun, keys in binds:
+        if fun in (
+            browse_frame,
+            drag,
+            drag_start,
+            menu_show,
+            resize_handler,
+            scroll,
+            zoom,
+            zoom_text,
+        ):
+            continue
+        if re.match("[a-z]( |$)", keys):
+            lbl = f"{fun.__doc__[:-1].title()} ({keys[0].upper()})"
+            menu.add_command(label=lbl, command=fun, underline=len(lbl) - 2)
+        else:
+            menu.add_command(label=fun.__doc__[:-1].title(), command=fun)
+
     root.mainloop()
 
 

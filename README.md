@@ -28,24 +28,25 @@ options:
 Binds:
 
 ```pre
-Escape q - Close fullscreen or app.
-F1 h - Show help.
-F11 Return f - Toggle fullscreen.
-Left Right Up Down BackSpace space MouseWheel Button-4 Button-5 Home End Key-1 x - Browse.
+q Escape - Close fullscreen or app.
+h F1 - Toggle help.
+f F11 Return - Toggle fullscreen.
+x Left Right Up Down BackSpace space MouseWheel Button-4 Button-5 Home End Key-1 - Browse.
 comma period - Browse animation frames.
 p - Pick a file to open.
 s - Save file as.
-Delete - Delete file. Bypasses Trash.
-F5 u - Update path info.
+d Delete - Delete file. Bypasses Trash.
+u F5 - Update path info.
 o - Set order.
-b c - Set background color.
-B1-Motion B2-Motion B3-Motion - Drag image around.
+c - Set background color.
+Button-3 - Show menu.
+B1-Motion B2-Motion - Drag image around.
 Ctrl-Left Ctrl-Right Ctrl-Up Ctrl-Down - Scroll.
 Ctrl-MouseWheel minus plus equal 0 - Zoom.
 Alt-MouseWheel Alt-minus Alt-plus Alt-equal - Zoom text.
 r - Resize type to fit window.
 a - Toggle animation.
-Pause - Toggle slideshow.
+b Pause - Toggle slideshow.
 l - Toggle line overlay.
 t Shift-t - Transpose image.
 i - Toggle info overlay.
