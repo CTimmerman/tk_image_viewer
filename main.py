@@ -405,7 +405,7 @@ def load_svg(fpath):
 
     surface = pygame.image.load(BytesIO(data.encode()))
     bf = BytesIO()
-    pygame.image.save(surface, bf)
+    pygame.image.save(surface, bf, "png")
     IMAGE = Image.open(bf)
 
 
