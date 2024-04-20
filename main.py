@@ -688,16 +688,25 @@ ICC Profile:
     if hasattr(IMAGE, "_getexif"):
         exif = IMAGE._getexif()  # pylint: disable=protected-access
         if exif:
-            msg += "\n\nEXIF:"
+            log.debug("Got exif: %s", exif)
+            log.debug("im.exif: %s", INFO["exif"])
+            encoding = "utf_16_be" if INFO["exif"].startswith(b"MM") else "utf_16_le"
+            log.debug("Encoding: %s", encoding)
+            msg += f"\n\nEXIF: {encoding}"
             for key, val in exif.items():
+                decoded_val = val
                 if isinstance(val, bytes):
-                    # val = val.decode("utf_16_le")
-                    log.debug(
-                        "==========================================================\nDecoded %s",
-                        (val.decode("utf_16_le"), val),
-                    )
+                    try:
+                        decoded_val = val.decode(encoding)
+                        log.debug(
+                            "==========\nDecoded %s",
+                            (key, decoded_val, val),
+                        )
+                    except UnicodeDecodeError:
+                        log.error("Failed to decode %s", (encoding, val))
+
                 if key in ExifTags.TAGS:
-                    msg += f"\n{ExifTags.TAGS[key]}: {val}"
+                    msg += f"\n{ExifTags.TAGS[key]}: {decoded_val}"
                     if ExifTags.TAGS[key] == "Orientation":
                         msg += " "
                         if val == 1:
@@ -962,6 +971,7 @@ def set_bg(event=None):
     canvas.config(bg=bg)
     canvas.itemconfig(canvas.im_bg, fill=bg)
     ERROR_OVERLAY.config(bg=bg)
+    menu.config(bg=bg, fg="black" if BG_INDEX == len(BG_COLORS) - 1 else "white")
 
 
 @log_this
@@ -1158,7 +1168,7 @@ canvas_info = canvas.create_text(
     font=("Consolas", FONT_SIZE),
     width=root_w,
 )
-canvas.im_bg = canvas.create_rectangle(0, 0, root_w, root_h, fill="black")  # type: ignore
+canvas.im_bg = canvas.create_rectangle(0, 0, root_w, root_h, fill="black", width=0)  # type: ignore
 canvas.image_ref = canvas.create_image(root_w // 2, root_h // 2, anchor="center")  # type: ignore
 root.update()
 scrollx = tkinter.Scrollbar(root, orient="horizontal", command=canvas.xview)
@@ -1181,7 +1191,6 @@ ERROR_OVERLAY = tkinter.Label(
     wraplength=root_w,
 )
 ERROR_OVERLAY.place(x=0, y=0, relwidth=1, relheight=1)
-set_bg()
 
 
 def menu_show(event):
@@ -1290,6 +1299,7 @@ def main(args):
         else:
             menu.add_command(label=fun.__doc__[:-1].title(), command=fun)
 
+    set_bg()
     root.mainloop()
 
 
