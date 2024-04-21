@@ -2,6 +2,16 @@
 
 An image viewer that supports arrow keys, HEIC, WebP, foreign characters, long paths, and zip. Unlike IrfanView 64 4.54, JPEGView 1.0.37, and SumatraPDF v3.5.2 64-bit.
 
+## Install
+
+```cmd
+install
+```
+
+Will take about 9.5 MB if the Python libs aren't already installed.
+
+## Use
+
 ```pre
 usage: tk_image_viewer [-h] [-f] [-g WxH+X+Y] [-o ORDER] [-q N] [-r [N]] [-s [ms]] [-t N] [-u [ms]] [-v] [path]
 
