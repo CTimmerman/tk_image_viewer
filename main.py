@@ -473,6 +473,7 @@ def im_load(path=None):
         error_show(msg)
         info_set(msg)
         root.title(msg + " - " + TITLE)
+        raise
 
 
 def get_fit_ratio(im_w, im_h):
@@ -658,11 +659,6 @@ def info_get() -> str:
             msg += f"{k}: {v}\n"
         elif k == "exif":
             msg += f"{k}: {(str(v)[:80] + '...') if len(str(v)) > 80 else v}\n"
-            if v.startswith(b"MM"):
-                v = "BE: " + v.decode("utf_16_be")
-            else:
-                v = "LE:" + v.decode("utf_16_le")
-            msg += f"{k}: {v}\n"
         else:
             msg += f"{k}: {v}\n"
             # msg += f"{k}: {(str(v)[:80] + '...') if len(str(v)) > 80 else v}\n"
@@ -705,7 +701,7 @@ ICC Profile:
         if exif:
             log.debug("Got exif: %s", exif)
             log.debug("im.exif: %s", INFO["exif"])
-            encoding = "utf_16_be" if INFO["exif"].startswith(b"MM") else "utf_16_le"
+            encoding = "utf_16_be" if b"MM" in INFO["exif"][:8] else "utf_16_le"
             log.debug("Encoding: %s", encoding)
             msg += f"\n\nEXIF: {encoding}"
             for key, val in exif.items():
