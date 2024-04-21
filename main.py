@@ -299,6 +299,7 @@ def info_bg_update():
         Image.new("RGBA", (x2 - x1, y2 - y1), "#000a")
     )
     canvas.itemconfig(canvas.overlay, image=canvas.overlay_tkim)  # type: ignore
+    canvas.coords(canvas.im_bg, x1, y1, x2, y2)
 
 
 def lines_toggle(event=None):
@@ -647,14 +648,28 @@ def scrollbars_set():
 
 def info_get() -> str:
     """Get image info."""
-    msg = "\n".join(
-        f"{k}: {(str(v)[:80] + '...') if len(str(v)) > 80 else v}"
-        for k, v in INFO.items()
-    )
+    msg = ""
+    for k, v in INFO.items():
+        if k == "comment":
+            try:
+                v = v.decode("utf8")
+            except UnicodeDecodeError:
+                v = v.decode("utf_16_be")
+            msg += f"{k}: {v}\n"
+        elif k == "exif":
+            msg += f"{k}: {(str(v)[:80] + '...') if len(str(v)) > 80 else v}\n"
+            if v.startswith(b"MM"):
+                v = "BE: " + v.decode("utf_16_be")
+            else:
+                v = "LE:" + v.decode("utf_16_le")
+            msg += f"{k}: {v}\n"
+        else:
+            msg += f"{k}: {v}\n"
+            # msg += f"{k}: {(str(v)[:80] + '...') if len(str(v)) > 80 else v}\n"
     if not IMAGE:
         return msg
 
-    msg += f"\nFormat: {IMAGE.format}"
+    msg += f"Format: {IMAGE.format}"
     try:
         msg += f"\nMIME type: {IMAGE.get_format_mimetype()}" ""  # type: ignore
     except AttributeError:
