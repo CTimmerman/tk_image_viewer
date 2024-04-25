@@ -46,7 +46,6 @@ FONT_SIZE = 14
 IMAGE: Image.Image | None = None
 IM_FRAME = 0
 INFO: dict = {}
-lines: list = []
 lines_on: bool = False
 OLD_INDEX = -1
 QUALITY = Image.Resampling.NEAREST  # 0
@@ -301,11 +300,22 @@ def help_toggle(event=None):
     if root.show_info and canvas.itemcget(canvas_info, "text").startswith("C - Set"):
         info_hide()
     else:
-        msg = "\n".join(
-            f"{re.sub('((^|-)[a-z])', lambda m: m.group(1).upper(), keys.replace('Control', 'Ctrl').replace('T', 'Shift-T').replace('U', 'Shift-U'), 0, re.MULTILINE)} - {fun.__doc__.replace('...', '')}"
-            for fun, keys in binds
-            if "Configure" not in keys and "ButtonPress" not in keys
-        )
+        lines = []
+        for fun, keys in binds:
+            if "ButtonPress" in keys or "Configure" in keys:
+                continue
+            lines.append(
+                re.sub(
+                    "((^|-)[a-z])",
+                    lambda m: m.group(1).upper(),
+                    re.sub("(U|T)\\b", "Shift-\\1", keys.replace("Control", "Ctrl")),
+                    0,
+                    re.MULTILINE,
+                )
+                + " - "
+                + fun.__doc__.replace("...", "")
+            )
+        msg = "\n".join(lines)
         info_set(msg)
         info_show()
         log.debug(msg)
@@ -329,11 +339,11 @@ def info_bg_update():
 
 def lines_toggle(event=None):
     """Toggle line overlay."""
-    global lines, lines_on
-    if lines:
-        for line in lines:
+    global lines_on
+    if canvas.lines:
+        for line in canvas.lines:
             canvas.delete(line)
-        lines = []
+        canvas.lines = []
     lines_on = not lines_on
     toast("Lines: %s" % lines_on)
     resize_handler()
@@ -971,12 +981,12 @@ def resize_handler(event=None):
     if lines_on:
         w = root.winfo_width() - 1
         h = root.winfo_height() - 1
-        if not lines:
-            lines.append(canvas.create_line(0, 0, w, 0, 0, h, w, h, fill="#f00"))  # type: ignore
-            lines.append(canvas.create_line(0, h, 0, 0, w, h, w, 0, fill="#f00"))  # type: ignore
+        if not canvas.lines:
+            canvas.lines.append(canvas.create_line(0, 0, w, 0, 0, h, w, h, fill="#f00"))  # type: ignore
+            canvas.lines.append(canvas.create_line(0, h, 0, 0, w, h, w, 0, fill="#f00"))  # type: ignore
         else:
-            canvas.coords(lines[0], 0, 0, w, 0, 0, h, w, h)
-            canvas.coords(lines[1], 0, h, 0, 0, w, h, w, 0)
+            canvas.coords(canvas.lines[0], 0, 0, w, 0, 0, h, w, h)
+            canvas.coords(canvas.lines[1], 0, h, 0, 0, w, h, w, 0)
 
     if WINDOW_SIZE != new_size:
         ERROR_OVERLAY.config(wraplength=event.width)
@@ -1310,6 +1320,7 @@ TOAST = tkinter.Label(
 TOAST.place(x=0, y=0)
 
 canvas = tkinter.Canvas(bg="blue", borderwidth=0, highlightthickness=0, relief="flat")
+canvas.lines = []  # type: ignore
 canvas.place(x=0, y=0, relwidth=1, relheight=1)
 canvas.overlay = canvas.create_image(0, 0, anchor="nw")  # type: ignore
 canvas_info = canvas.create_text(
