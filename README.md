@@ -47,13 +47,13 @@ H F1 - Toggle help.
 I - Toggle info overlay.
 A - Toggle animation.
 Comma period - Browse animation frames.
-Ctrl-Left Ctrl-Right Ctrl-Shift-Up Ctrl-Down - Scroll.
+Ctrl-Left Ctrl-Right Ctrl-Up Ctrl-Down - Scroll.
 Ctrl-MouseWheel minus plus equal 0 - Zoom.
 R - Resize type to fit window.
 T Shift-T - Transpose image.
 Alt-MouseWheel Alt-Minus Alt-Plus Alt-Equal - Zoom text.
 B Pause - Toggle slideshow.
-X Left Right Shift-Up Down BackSpace space MouseWheel Button-4 Button-5 Home End Key-1 - Browse.
+X Left Right Up Down BackSpace space MouseWheel Button-4 Button-5 Home End Key-1 - Browse.
 O - Set order.
 D Delete - Delete file. Bypasses Trash.
 P - Pick a file to open.
