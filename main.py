@@ -1,4 +1,4 @@
-# pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, too-many-boolean-expressions, too-many-branches, too-many-lines, too-many-locals, too-many-nested-blocks,too-many-statements, unused-argument, unused-import
+# pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, too-many-boolean-expressions, too-many-branches, too-many-lines, too-many-locals, too-many-nested-blocks,too-many-statements, unused-argument, unused-import, wrong-import-position
 """Tk Image Viewer
 by Cees Timmerman
 2024-03-17 First version.
@@ -8,28 +8,25 @@ by Cees Timmerman
 2024-03-30 Copy info + paste/drop picture(s)/paths.
 2024-04-08 Scroll/drag.
 2024-04-10 AVIF, JXL, SVG support.
+2024-04-25 Photoshop IRB, XMP, exiftool support.
 """
 import base64, enum, functools, gzip, logging, os, pathlib, random, re, time, tkinter, zipfile  # noqa: E401
 from io import BytesIO
 from tkinter import filedialog, messagebox
 
-from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
+from exiftool import ExifToolHelper  # type: ignore  # Needs exiftool in path.
 import pillow_avif  # type: ignore  # noqa: F401  # pylint: disable=E0401
 import pillow_jxl  # noqa: F401
-from PIL import (
-    ExifTags,
-    Image,
-    ImageCms,
-    ImageGrab,
-    ImageTk,
-    IptcImagePlugin,
-    TiffTags,
-)
+import yaml
+from PIL import ExifTags, Image, ImageCms, ImageGrab, ImageTk, IptcImagePlugin, TiffTags
 from PIL.Image import Transpose
 from pillow_heif import register_heif_opener  # type: ignore
+from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
-import pygame  # pylint: disable=wrong-import-position
+import pygame  # noqa: E402
+
+from psd_info import psd_resource_ids
 
 
 class Fits(enum.IntEnum):
@@ -53,15 +50,13 @@ lines: list = []
 lines_on: bool = False
 OLD_INDEX = -1
 QUALITY = Image.Resampling.NEAREST  # 0
-REFRESH_INTERVAL = 0
+REFRESH_INTERVAL = -4000
 SCALE = 1.0
 SCALE_MIN = 0.001
 SCALE_MAX = 40.0
 SCALE_TEXT = 1.0
-SHOW_INFO = False
 SORTS = "natural string ctime mtime size".split()
 SORT = "natural"
-SUPPORTED_FILES: list = []
 TITLE = __doc__.split("\n", 1)[0]
 TRANSPOSE_INDEX = -1
 VERBOSITY_LEVELS = [
@@ -88,7 +83,7 @@ register_heif_opener()
 def log_this(func):
     """Decorator to log function calls."""
 
-    @functools.wraps(func)  # Too keep signature.
+    @functools.wraps(func)  # Keep signature.
     def inner(*args, **kwargs):
         log.debug("Calling %s with %s, %s", func.__name__, args, kwargs)
         return func(*args, **kwargs)
@@ -247,6 +242,38 @@ def delete_file(event=None):
         paths_update()
 
 
+def drag_start(e):
+    """Keep start pos for delta move."""
+    canvas.dragx = e.x
+    canvas.dragy = e.y
+
+
+def drag(e):
+    """Drag image."""
+    if e.widget != canvas:
+        return
+    x, y, x2, y2 = canvas.bbox(canvas.image_ref)
+    w = x2 - x
+    h = y2 - y
+    dx, dy = e.x - canvas.dragx, e.y - canvas.dragy
+    # Keep at least a corner in view.
+    # Goes entirely out of view when switching to smaller imag!
+    # new_x = max(-w + 64, min(root.winfo_width() - 64, x + dx))
+    # new_y = max(-h + 64, min(root.winfo_height() - 64, y + dy))
+
+    new_x = max(0, min(root.winfo_width() - w, x + dx))
+    new_y = max(0, min(root.winfo_height() - h, y + dy))
+    if new_x == 0:
+        canvas.xview_scroll(-dx, "units")
+    if new_y == 0:
+        canvas.yview_scroll(-dy, "units")
+
+    dx, dy = new_x - x, new_y - y
+    canvas.move(canvas.image_ref, dx, dy)
+    scrollbars_set()
+    canvas.dragx, canvas.dragy = e.x, e.y
+
+
 @log_this
 def drop_handler(event):
     """Handles dropped files."""
@@ -269,21 +296,19 @@ def error_show(msg: str):
     ERROR_OVERLAY.lift()
 
 
-def help_handler(event=None):
+def help_toggle(event=None):
     """Toggle help."""
-    global SHOW_INFO
-    SHOW_INFO = not SHOW_INFO
-    if SHOW_INFO:
+    if root.show_info and canvas.itemcget(canvas_info, "text").startswith("C - Set"):
+        info_hide()
+    else:
         msg = "\n".join(
-            f"{keys.replace('Control', 'Ctrl')} - {fun.__doc__.replace('...', '')}"
+            f"{re.sub('((^|-)[a-z])', lambda m: m.group(1).upper(), keys.replace('Control', 'Ctrl').replace('T', 'Shift-T').replace('U', 'Shift-U'), 0, re.MULTILINE)} - {fun.__doc__.replace('...', '')}"
             for fun, keys in binds
             if "Configure" not in keys and "ButtonPress" not in keys
         )
-        log.debug(msg)
         info_set(msg)
         info_show()
-    else:
-        info_hide()
+        log.debug(msg)
 
 
 def info_set(msg: str):
@@ -312,25 +337,6 @@ def lines_toggle(event=None):
     lines_on = not lines_on
     toast("Lines: %s" % lines_on)
     resize_handler()
-
-
-def set_stats(path):
-    """Set stats."""
-    global INFO
-    stats = os.stat(path)
-    log.debug("Stat: %s", stats)
-    INFO = {
-        # "Path": pathlib.Path(path),
-        "Size": f"{stats.st_size:,} B",
-        "Accessed": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stats.st_atime)),
-        "Modified": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stats.st_mtime)),
-        "Created": time.strftime(
-            "%Y-%m-%d %H:%M:%S",
-            time.localtime(
-                stats.st_birthtime if hasattr(stats, "st_birthtime") else stats.st_ctime
-            ),
-        ),
-    }
 
 
 def load_mhtml(path):
@@ -366,7 +372,7 @@ def load_mhtml(path):
 def load_svg(fpath):
     """Load an SVG file."""
     global IMAGE
-    if fpath.suffix == ".svgz":
+    if fpath.suffix == ".svgz":  # NOSONAR
         with gzip.open(fpath, "rt", encoding="utf8") as f:
             data = f.read()
     else:
@@ -455,6 +461,7 @@ def im_load(path=None):
                 k,
                 str(v)[:80] + "..." if len(str(v)) > 80 else v,
             )
+        log.debug("Loaded info.")
         im_resize(ANIMATION_ON)
     # pylint: disable=W0718
     except (
@@ -471,7 +478,6 @@ def im_load(path=None):
         IMAGE = None
         msg = f"{msg} {err_msg} {path}"
         error_show(msg)
-        info_set(msg)
         root.title(msg + " - " + TITLE)
         raise
 
@@ -548,10 +554,8 @@ def im_resize(loop=False):
         except EOFError as ex:
             log.error("IMAGE EOF. %s", ex)
         duration = (INFO["duration"] or 100) if "duration" in INFO else 100
-        try:
+        if hasattr(root, "animation"):
             root.after_cancel(root.animation)
-        except AttributeError:
-            pass
         root.animation = root.after(duration, im_resize, ANIMATION_ON)
 
 
@@ -591,176 +595,226 @@ def im_show(im):
         f" @ {'%sx%s' % im.size} {paths[path_index]}"
     )
     root.title(msg + " - " + TITLE)
-    info_set(msg + "\n" + info_get())
+    if root.show_info:
+        info_set(msg + info_get())
     scrollbars_set()
-
-
-def natural_sort(s):
-    """Sort by number and string."""
-    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", str(s))]
-
-
-def scroll(event):
-    """Scroll."""
-    k = event.keysym
-    if k == "Left":
-        canvas.xview_scroll(-10, "units")
-    elif k == "Right":
-        canvas.xview_scroll(10, "units")
-    if k == "Up":
-        canvas.yview_scroll(-10, "units")
-    elif k == "Down":
-        canvas.yview_scroll(10, "units")
-
-
-def scrollbars_set():
-    """Hide/show scrollbars."""
-    global OLD_INDEX
-    try:
-        x, y, x2, y2 = canvas.bbox(canvas.image_ref, canvas_info)
-        w = x2 - x
-        h = y2 - y
-        sv = max(0, y) + h > root.winfo_height()
-        # Vertical scrollbar causing horizontal scrollbar.
-        sh = max(0, x) + w > root.winfo_width() - 16 * sv
-        # Horizontal scrollbar causing vertical scrollbar.
-        sv = max(0, y) + h > root.winfo_height() - 16 * sh
-        if sh:
-            h += 16
-            scrollx.lift()
-        else:
-            scrollx.lower()
-
-        if sv:
-            w += 16
-            scrolly.lift()
-        else:
-            scrolly.lower()
-
-        scrollregion = (min(x, 0), min(y, 0), x + w, y + h)
-        canvas.config(scrollregion=scrollregion)
-        if path_index != OLD_INDEX:
-            canvas.xview_moveto(0)
-            canvas.yview_moveto(0)
-            OLD_INDEX = path_index
-    except TypeError as ex:
-        log.error(ex)
 
 
 def info_get() -> str:
     """Get image info."""
     msg = ""
     for k, v in INFO.items():
+        if k in ("exif", "icc_profile", "photoshop"):
+            continue
         if k == "comment":
             try:
                 v = v.decode("utf8")
             except UnicodeDecodeError:
                 v = v.decode("utf_16_be")
-            msg += f"{k}: {v}\n"
+            msg += f"\n{k}: {v}"
         elif k == "exif":
-            msg += f"{k}: {(str(v)[:80] + '...') if len(str(v)) > 80 else v}\n"
+            msg += f"\n{k}: {(str(v)[:80] + '...') if len(str(v)) > 80 else v}"
         else:
-            msg += f"{k}: {v}\n"
-            # msg += f"{k}: {(str(v)[:80] + '...') if len(str(v)) > 80 else v}\n"
+            msg += f"\n{k}: {v}"
+            # msg += f"\n{k}: {(str(v)[:80] + '...') if len(str(v)) > 80 else v}"
     if not IMAGE:
         return msg
 
-    msg += f"Format: {IMAGE.format}"
+    msg += f"\nFormat: {IMAGE.format}"
     try:
-        msg += f"\nMIME type: {IMAGE.get_format_mimetype()}" ""  # type: ignore
+        msg += f"\nMIME type: {IMAGE.get_format_mimetype()}"  # type: ignore
     except AttributeError:
         pass
-    icc = IMAGE.info.get("icc_profile")
-    if icc:
-        p = ImageCms.ImageCmsProfile(BytesIO(icc))
-        intent = ImageCms.getDefaultIntent(p)
-        man = ImageCms.getProfileManufacturer(p).strip()
-        model = ImageCms.getProfileModel(p).strip()
-        msg += f"""
-
-ICC Profile:
--Copyright: {ImageCms.getProfileCopyright(p).strip()}
--Description: {ImageCms.getProfileDescription(p).strip()}
--Intent: {('Perceptual', 'Relative colorimetric', 'Saturation', 'Absolute colorimetric')[intent]}
--isIntentSupported: {ImageCms.isIntentSupported(p, intent, 1)}
-"""
-        if man:
-            msg += f"-Manufacturer: {man}"
-        if model:
-            msg += f"-Model: {model}"
 
     # Image File Directories (IFD)
-    if hasattr(IMAGE, "tag_v2"):
-        meta_dict = {TiffTags.TAGS_V2[key]: IMAGE.tag_v2[key] for key in IMAGE.tag_v2}
-        log.debug("tag_v2 %s", meta_dict)
+    if "tag_v2" in INFO:
+        tv2 = INFO["tag_v2"]
+        meta_dict = {TiffTags.TAGS_V2[k]: v for k, v in tv2}
+        log.debug("tag_v2: %s", meta_dict)
+        msg += "\ntag_v2: {meta_dict}\n"
 
+    for fun in (info_exif, info_icc, info_iptc, info_xmp, info_psd, info_exiftool):
+        s = fun()
+        if s:
+            msg += "\n\n" + s
+
+    return msg
+
+
+def info_exiftool() -> str:
+    """Uses exiftool on path."""
+    s = ""
+    try:
+        with ExifToolHelper() as et:
+            for d in et.get_metadata(paths[path_index]):
+                for k, v in d.items():
+                    s += f"\n{k}: {v}"
+    except FileNotFoundError:
+        pass
+    return s.strip()
+
+
+def info_exif() -> str:
+    """Return EXIF info."""
+    s = ""
     # Exchangeable Image File (EXIF)
     # Workaround from https://github.com/python-pillow/Pillow/issues/5863
     if hasattr(IMAGE, "_getexif"):
-        exif = IMAGE._getexif()  # pylint: disable=protected-access
+        exif = IMAGE._getexif()  # type: ignore  # pylint: disable=protected-access
         if exif:
             log.debug("Got exif: %s", exif)
             log.debug("im.exif: %s", INFO["exif"])
             encoding = "utf_16_be" if b"MM" in INFO["exif"][:8] else "utf_16_le"
             log.debug("Encoding: %s", encoding)
-            msg += f"\n\nEXIF: {encoding}"
+            s += f"EXIF: {encoding}"
             for key, val in exif.items():
                 decoded_val = val
+                print("EXIF TAG", key, ExifTags.TAGS.get(key, key), val)
                 if isinstance(val, bytes):
-                    try:
-                        decoded_val = val.decode(encoding)
-                        log.debug(
-                            "==========\nDecoded %s",
-                            (key, decoded_val, val),
-                        )
-                    except UnicodeDecodeError:
-                        log.error("Failed to decode %s", (encoding, val))
+                    print("BYTES!", str(val[:80]), str(val.replace(b"\x00", b"")))
+                    if val.startswith(b"ASCII\0\0\0"):
+                        decoded_val = str(val[8:])
+                    elif val.startswith(b"UNICODE\0"):
+                        val = val[8:]
+                        if val.startswith(b"\00"):
+                            log.debug("Invalid Unicode?")
+                            decoded_val = str(val.replace(b"\x00", b""))
+                        else:
+                            try:
+                                decoded_val = val.decode(encoding)
+                                log.debug(
+                                    "==========\nDecoded %s",
+                                    (key, decoded_val, val),
+                                )
+                            except UnicodeDecodeError:
+                                log.error("Failed to decode %s", (encoding, val))
+                                encoding = (
+                                    "utf-16-be"
+                                    if encoding == "utf-16-le"
+                                    else "utf-16-le"
+                                )
+                                decoded_val = val.decode(encoding)
+                                log.debug(
+                                    "==========\nDecoded2 %s",
+                                    (key, decoded_val, encoding),
+                                )
 
                 if key in ExifTags.TAGS:
-                    msg += f"\n{ExifTags.TAGS[key]}: {decoded_val}"
+                    s += f"\n{ExifTags.TAGS[key]}: {decoded_val}"
                     if ExifTags.TAGS[key] == "Orientation":
-                        msg += " "
-                        if val == 1:
-                            msg += "Normal"
-                        elif val == 2:
-                            msg += "FLIP_LEFT_RIGHT"
-                        elif val == 3:
-                            msg += "ROTATE_180"
-                        elif val == 4:
-                            msg += "FLIP_TOP_BOTTOM"
-                        elif val == 5:
-                            msg += "TRANSPOSE"
-                        elif val == 6:
-                            msg += "ROTATE_90"
-                        elif val == 7:
-                            msg += "TRANSVERSE"
-                        elif val == 8:
-                            msg += "ROTATE_270"
+                        s += (
+                            " "
+                            + (
+                                "",
+                                "Normal",
+                                "FLIP_LEFT_RIGHT",
+                                "ROTATE_180",
+                                "FLIP_TOP_BOTTOM",
+                                "TRANSPOSE",
+                                "ROTATE_90",
+                                "TRANSVERSE",
+                                "ROTATE_270",
+                            )[val]
+                        )
                 else:
-                    msg += f"\nUnknown EXIF tag {key}: {val}"
+                    s += f"\nUnknown EXIF tag {key}: {val}"
 
         # Image File Directory (IFD)
-        exif = IMAGE.getexif()
-        for k in ExifTags.IFD:
-            try:
-                msg += f"\nIFD tag {k}: {ExifTags.IFD(k).name}: {exif.get_ifd(k)}"
-            except KeyError:
-                log.debug("IFD not found. %s", k)
+        # exif = IMAGE.getexif()  # type: ignore
+        # for k in ExifTags.IFD:
+        #     try:
+        #         v = exif.get_ifd(k)
+        #         if v:
+        #             s += f"\nIFD tag {k}: {ExifTags.IFD(k).name}: {v}"
+        #     except KeyError:
+        #         log.debug("IFD not found. %s", k)
+    return s.strip()
 
+
+def info_icc() -> str:
+    """Return the ICC color profile info."""
+    s = ""
+    icc = IMAGE.info.get("icc_profile")  # type: ignore
+    if icc:
+        p = ImageCms.ImageCmsProfile(BytesIO(icc))
+        intent = ImageCms.getDefaultIntent(p)
+        man = ImageCms.getProfileManufacturer(p).strip()
+        model = ImageCms.getProfileModel(p).strip()
+        s += f"""ICC Profile:
+Copyright: {ImageCms.getProfileCopyright(p).strip()}
+Description: {ImageCms.getProfileDescription(p).strip()}
+Intent: {('Perceptual', 'Relative colorimetric', 'Saturation', 'Absolute colorimetric')[intent]}
+isIntentSupported: {ImageCms.isIntentSupported(p, intent, 1)}"""
+        if man:
+            s += f"\nManufacturer: {man}"
+        if model:
+            s += f"\nModel: {model}"
+    return s.strip()
+
+
+def info_iptc() -> str:
+    """Return IPTC metadata."""
+    s = ""
     iptc = IptcImagePlugin.getiptcinfo(IMAGE)
     if iptc:
-        msg += "\nIPTC:"
+        s += "IPTC:"
         for k, v in iptc.items():
-            msg += "\nKey:{} Value:{}".format(k, repr(v))
+            s += "\nKey:{} Value:{}".format(k, repr(v))
+    return s.strip()
 
-    return msg
+
+def info_psd() -> str:
+    """Return PhotoShop Document info."""
+    s = ""
+    if "photoshop" in INFO:
+        s += "Photoshop:\n"
+        for k, v in INFO["photoshop"].items():
+            readable_v = re.sub(
+                r"\\x00", "", re.sub(r"(\\x..){2,}", " ", str(v))
+            ).strip()
+            # for enc in ('utf-16-le', 'utf-16-be', 'utf8'):
+            #     try:
+            #         readable_v = v.decode(enc)
+            #         s += f"\nFROM ENCODING {enc}\n"
+            #         break
+            #     except:
+            #         pass
+            if not readable_v or re.match("b'\\s+'", readable_v):
+                # Often binary data like version numbers.
+                if len(v) < 5:
+                    v = int.from_bytes(v, byteorder="big")
+                s += f"{psd_resource_ids.get(k, k)}: {(str(v)[:200] + '...') if len(str(v)) > 200 else v}\n"
+            else:
+                s += f"{psd_resource_ids.get(k, k)}: {readable_v[:200] + '...' if len(readable_v) > 200 else readable_v}\n"
+            if (
+                k == 1036
+            ):  # PS5 thumbnail, https://www.awaresystems.be/imaging/tiff/tifftags/docs/photoshopthumbnail.html
+                continue
+
+    return s.strip()
+
+
+def info_xmp() -> str:
+    """Return XMP metadata."""
+    s = ""
+    if hasattr(IMAGE, "getxmp"):
+        xmp = IMAGE.getxmp()  # type: ignore
+        if xmp:
+            s += "XMP:\n"
+            s += yaml.safe_dump(xmp)
+            # Ugly:
+            # import json
+            # s += json.dumps(xmp, indent=2, sort_keys=True)
+            # import toml
+            # s += toml.dumps(xmp)
+            # s += "\n\n" + str(xmp)
+    return s.strip()
 
 
 def info_toggle(event=None):
     """Toggle info overlay."""
-    global SHOW_INFO
-    SHOW_INFO = not SHOW_INFO
-    if SHOW_INFO:
+    if not root.show_info or canvas.itemcget(canvas_info, "text").startswith("C - Set"):
+        info_set(root.title() + info_get())
         log.debug("Showing info:\n%s", canvas.itemcget(canvas_info, "text"))
         info_show()
     else:
@@ -769,78 +823,35 @@ def info_toggle(event=None):
 
 def info_show():
     """Show info overlay."""
+    root.show_info = True
     canvas.lift(canvas.overlay)
     canvas.lift(canvas_info)
+    scrollbars_set()
 
 
 def info_hide():
     """Hide info overlay."""
+    root.show_info = False
     canvas.lower(canvas.overlay)
     canvas.lower(canvas_info)
-
-
-def drag_start(e):
-    """Keep start pos for delta move."""
-    canvas.dragx = e.x
-    canvas.dragy = e.y
-
-
-def drag(e):
-    """Drag image around."""
-    if e.widget != canvas:
-        return
-    x, y, x2, y2 = canvas.bbox(canvas.image_ref)
-    w = x2 - x
-    h = y2 - y
-    dx, dy = e.x - canvas.dragx, e.y - canvas.dragy
-    # Keep at least a corner in view.
-    # Goes entirely out of view when switching to smaller imag!
-    # new_x = max(-w + 64, min(root.winfo_width() - 64, x + dx))
-    # new_y = max(-h + 64, min(root.winfo_height() - 64, y + dy))
-
-    new_x = max(0, min(root.winfo_width() - w, x + dx))
-    new_y = max(0, min(root.winfo_height() - h, y + dy))
-    if new_x == 0:
-        canvas.xview_scroll(-dx, "units")
-    if new_y == 0:
-        canvas.yview_scroll(-dy, "units")
-
-    dx, dy = new_x - x, new_y - y
-    canvas.move(canvas.image_ref, dx, dy)
+    info_set(canvas.itemcget(canvas_info, "text")[:7])
     scrollbars_set()
-    canvas.dragx, canvas.dragy = e.x, e.y
 
 
-def set_supported_files():
-    """Set supported files. TODO: Distinguish between openable and saveable."""
-    global SUPPORTED_FILES
-    exts = Image.registered_extensions()
-    exts[".eml"] = "MHTML"
-    exts[".mht"] = "MHTML"
-    exts[".mhtml"] = "MHTML"
-    exts[".svg"] = "SVG"
-    exts[".svgz"] = "SVG"
-    exts[".zip"] = "ZIP"
-
-    type_exts = {}
-    for k, v in exts.items():
-        type_exts.setdefault(v, []).append(k)
-
-    SUPPORTED_FILES = [
-        ("All supported files", " ".join(sorted(list(exts)))),
-        ("All files", "*"),
-        ("Archives", ".eml .mht .mhtml .zip"),
-        *sorted(type_exts.items()),
-    ]
+def menu_show(event):
+    """Show menu."""
+    menu.post(event.x_root, event.y_root)
 
 
-set_supported_files()
+def natural_sort(s):
+    """Sort by number and string."""
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", str(s))]
 
 
 @log_this
 def path_open(event=None):
     """Pick a file to open...."""
-    filename = filedialog.askopenfilename(filetypes=SUPPORTED_FILES)
+    filename = filedialog.askopenfilename(filetypes=root.SUPPORTED_FILES_READ)
     if filename:
         paths_update(None, filename)
 
@@ -855,7 +866,9 @@ def path_save(event=None):
 
     log.debug("Image info to be saved: %s", IMAGE.info)
     filename = filedialog.asksaveasfilename(
-        initialfile=p.absolute(), defaultextension=p.suffix, filetypes=SUPPORTED_FILES
+        initialfile=p.absolute(),
+        defaultextension=p.suffix,
+        filetypes=root.SUPPORTED_FILES_WRITE,
     )
     if filename:
         log.info("Saving %s", filename)
@@ -863,7 +876,6 @@ def path_save(event=None):
             IMAGE.save(
                 filename,
                 # dpi=INFO.get("dpi", b""),
-                # exif=INFO.get("exif", b""),
                 # icc_profile=INFO.get("icc_profile", b""),
                 **IMAGE.info,
                 lossless=True,
@@ -931,11 +943,24 @@ def paths_update(event=None, path=None):
     paths_sort(path)
 
 
-def update_loop():
+def refresh_loop():
     """Autoupdate paths."""
-    if REFRESH_INTERVAL:
+    if REFRESH_INTERVAL > 0:
         paths_update()
-        root.after(REFRESH_INTERVAL, update_loop)
+        if hasattr(root, "path_updater"):
+            root.after_cancel(root.path_updater)
+        root.path_updater = root.after(REFRESH_INTERVAL, refresh_loop)
+
+
+def refresh_toggle(event=None):
+    """Toggle autoupdate."""
+    global REFRESH_INTERVAL
+    REFRESH_INTERVAL = -REFRESH_INTERVAL
+    if REFRESH_INTERVAL > 0:
+        toast(f"Refreshing every {REFRESH_INTERVAL/1000:.2}s.")
+        refresh_loop()
+    else:
+        toast("Refresh off.")
 
 
 def resize_handler(event=None):
@@ -970,7 +995,53 @@ def resize_handler(event=None):
         WINDOW_SIZE = new_size
 
 
-@log_this
+def scroll(event):
+    """Scroll."""
+    k = event.keysym
+    if k == "Left":
+        canvas.xview_scroll(-10, "units")
+    elif k == "Right":
+        canvas.xview_scroll(10, "units")
+    if k == "Up":
+        canvas.yview_scroll(-10, "units")
+    elif k == "Down":
+        canvas.yview_scroll(10, "units")
+
+
+def scrollbars_set():
+    """Hide/show scrollbars."""
+    global OLD_INDEX
+    try:
+        x, y, x2, y2 = canvas.bbox(canvas.image_ref, canvas_info)
+        w = x2 - x
+        h = y2 - y
+        sv = max(0, y) + h > root.winfo_height()
+        # Vertical scrollbar causing horizontal scrollbar.
+        sh = max(0, x) + w > root.winfo_width() - 16 * sv
+        # Horizontal scrollbar causing vertical scrollbar.
+        sv = max(0, y) + h > root.winfo_height() - 16 * sh
+        if sh:
+            h += 16
+            scrollx.lift()
+        else:
+            scrollx.lower()
+
+        if sv:
+            w += 16
+            scrolly.lift()
+        else:
+            scrolly.lower()
+
+        scrollregion = (min(x, 0), min(y, 0), x + w, y + h)
+        canvas.config(scrollregion=scrollregion)
+        if path_index != OLD_INDEX:
+            canvas.xview_moveto(0)
+            canvas.yview_moveto(0)
+            OLD_INDEX = path_index
+    except TypeError as ex:
+        log.error(ex)
+
+
 def set_bg(event=None):
     """Set background color."""
     global BG_INDEX
@@ -996,6 +1067,78 @@ def set_order(event=None):
     log.info(s)
     toast(s)
     paths_sort()
+
+
+def set_stats(path):
+    """Set stats."""
+    global INFO
+    stats = os.stat(path)
+    log.debug("Stat: %s", stats)
+    INFO = {
+        # "Path": pathlib.Path(path),
+        "Size": f"{stats.st_size:,} B",
+        "Accessed": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stats.st_atime)),
+        "Modified": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stats.st_mtime)),
+        "Created": time.strftime(
+            "%Y-%m-%d %H:%M:%S",
+            time.localtime(
+                stats.st_birthtime if hasattr(stats, "st_birthtime") else stats.st_ctime
+            ),
+        ),
+    }
+
+
+def set_supported_files():
+    """Set supported files."""
+    exts = Image.registered_extensions()
+    exts[".eml"] = "MHTML"
+    exts[".mht"] = "MHTML"
+    exts[".mhtml"] = "MHTML"
+    exts[".svg"] = "SVG"
+    exts[".svgz"] = "SVG"
+    exts[".zip"] = "ZIP"
+
+    type_exts = {}
+    for k, v in exts.items():
+        type_exts.setdefault(v, []).append(k)
+
+    root.SUPPORTED_FILES_READ = [
+        (
+            "All supported files",
+            " ".join(sorted(list(k for k, v in exts.items() if v in Image.OPEN))),
+        ),
+        ("All files", "*"),
+        ("Archives", ".eml .mht .mhtml .zip"),
+        *sorted((k, v) for k, v in type_exts.items() if k in Image.OPEN),
+    ]
+    root.SUPPORTED_FILES_WRITE = [
+        (
+            "All supported files",
+            " ".join(sorted(list(k for k, v in exts.items() if v in Image.SAVE))),
+        ),
+        *sorted((k, v) for k, v in type_exts.items() if k in Image.SAVE),
+    ]
+
+    log.debug("Supports %s", ", ".join(s[1:].upper() for s in sorted(list(exts))))
+    log.debug(
+        "Open: %s",
+        ", ".join(
+            sorted(
+                [k[1:].upper() for k, v in exts.items() if v in Image.OPEN]
+                + ["EML", "MHT", "MHTML", "SVG", "SVGZ", "ZIP"]
+            )
+        ),
+    )
+    log.debug(
+        "Save: %s",
+        ", ".join(sorted(k[1:].upper() for k, v in exts.items() if v in Image.SAVE)),
+    )
+    log.debug(
+        "Save all frames: %s",
+        ", ".join(
+            sorted(k[1:].upper() for k, v in exts.items() if v in Image.SAVE_ALL)
+        ),
+    )
 
 
 @log_this
@@ -1142,10 +1285,9 @@ def zoom_text(event):
 
 
 root = TkinterDnD.Tk()  # notice - use this instead of tk.Tk()
-root.config(bg="green")
 root.drop_target_register(DND_FILES)
 root.dnd_bind("<<Drop>>", drop_handler)
-
+root.show_info = False
 root.title(TITLE)
 root_w, root_h = int(root.winfo_screenwidth() * 0.75), int(
     root.winfo_screenheight() * 0.75
@@ -1203,43 +1345,38 @@ ERROR_OVERLAY = tkinter.Label(
 )
 ERROR_OVERLAY.place(x=0, y=0, relwidth=1, relheight=1)
 
-
-def menu_show(event):
-    """Show menu."""
-    menu.post(event.x_root, event.y_root)
-
-
 # root.bind_all("<Key>", debug_keys)
 binds = [
-    (close, "q Escape"),
-    (help_handler, "h F1"),
+    (set_bg, "c"),
     (fullscreen_toggle, "f F11 Return"),
+    (close, "q Escape"),
+    (help_toggle, "h F1"),
+    (info_toggle, "i"),
+    (animation_toggle, "a"),
+    (browse_frame, "comma period"),
+    (scroll, "Control-Left Control-Right Control-Up Control-Down"),
+    (zoom, "Control-MouseWheel minus plus equal 0"),
+    (fit_handler, "r"),
+    (transpose_set, "t T"),
+    (zoom_text, "Alt-MouseWheel Alt-minus Alt-plus Alt-equal"),
+    (slideshow_toggle, "b Pause"),
     (
         browse,
         "x Left Right Up Down BackSpace space MouseWheel Button-4 Button-5 Home End Key-1",
     ),
-    (browse_frame, "comma period"),
+    (set_order, "o"),
+    (delete_file, "d Delete"),
     (path_open, "p"),
     (path_save, "s"),
-    (delete_file, "d Delete"),
     (paths_update, "u F5"),
-    (set_order, "o"),
-    (set_bg, "c"),
-    (drag_start, "ButtonPress"),
-    (menu_show, "Button-3"),  # Or rather tk_popup in Ubuntu?
-    (drag, "B1-Motion B2-Motion"),
-    (scroll, "Control-Left Control-Right Control-Up Control-Down"),
-    (zoom, "Control-MouseWheel minus plus equal 0"),
-    (zoom_text, "Alt-MouseWheel Alt-minus Alt-plus Alt-equal"),
-    (fit_handler, "r"),
-    (animation_toggle, "a"),
-    (slideshow_toggle, "b Pause"),
-    (lines_toggle, "l"),
-    (transpose_set, "t Shift-t"),
-    (info_toggle, "i"),
+    (refresh_toggle, "U"),
     (clipboard_copy, "Control-c"),
     (clipboard_paste, "Control-v"),
     (set_verbosity, "v"),
+    (drag, "B1-Motion B2-Motion"),
+    (drag_start, "ButtonPress"),
+    (menu_show, "Button-3"),  # Or rather tk_popup in Ubuntu?
+    (lines_toggle, "l"),
     (resize_handler, "Configure"),
 ]
 
@@ -1255,6 +1392,8 @@ def main(args):
         set_verbosity()
 
     log.debug("Args: %s", args)
+
+    set_supported_files()
 
     FIT = args.resize or 0
     QUALITY = [
@@ -1281,7 +1420,7 @@ def main(args):
 
     if args.update:
         REFRESH_INTERVAL = args.update
-        root.after(REFRESH_INTERVAL, update_loop)
+        root.after(1000, refresh_loop)
 
     if args.slideshow:
         SLIDESHOW_PAUSE = args.slideshow

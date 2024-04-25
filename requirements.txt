@@ -2,6 +2,8 @@ pillow
 pillow-avif-plugin
 pillow-heif
 pillow-jxl-plugin
+pyexiftool
 pygame
 pyperclip
+pyyaml
 tkinterdnd2
