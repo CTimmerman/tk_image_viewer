@@ -10,11 +10,11 @@ by Cees Timmerman
 2024-04-10 AVIF, JXL, SVG support.
 2024-04-25 Photoshop IRB, XMP, exiftool support.
 """
-import base64, enum, functools, gzip, logging, os, pathlib, random, re, time, tkinter, zipfile  # noqa: E401
+import base64, enum, functools, gzip, logging, os, pathlib, random, re, subprocess, time, tkinter, zipfile  # noqa: E401
 from io import BytesIO
 from tkinter import filedialog, messagebox
 
-from exiftool import ExifToolHelper  # type: ignore  # Needs exiftool in path.
+# from exiftool import ExifToolHelper  # type: ignore  # Needs exiftool in path.
 import pillow_avif  # type: ignore  # noqa: F401  # pylint: disable=E0401
 import pillow_jxl  # noqa: F401
 import yaml
@@ -26,7 +26,7 @@ from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 import pygame  # noqa: E402
 
-from psd_info import psd_resource_ids
+from psd_info import psd_resource_ids  # noqa: E402
 
 
 class Fits(enum.IntEnum):
@@ -46,7 +46,7 @@ FONT_SIZE = 14
 IMAGE: Image.Image | None = None
 IM_FRAME = 0
 INFO: dict = {}
-lines_on: bool = False
+b_lines: bool = False
 OLD_INDEX = -1
 QUALITY = Image.Resampling.NEAREST  # 0
 REFRESH_INTERVAL = -4000
@@ -154,7 +154,6 @@ def browse(event=None):
     im_load()
 
 
-@log_this
 def browse_frame(event=None):
     """Browse animation frames."""
     if not hasattr(IMAGE, "n_frames"):
@@ -178,16 +177,13 @@ def browse_frame(event=None):
     toast(f"Frame {1 + IM_FRAME}/{1 + n}", 1000)
 
 
-@log_this
 def clipboard_copy(event=None):
     """Copy info to clipboard while app is running."""
     root.clipboard_clear()
-    root.clipboard_append(
-        "{}\n{}".format(root.title(), "\n".join(f"{k}: {v}" for k, v in INFO.items()))
-    )
+    root.clipboard_append(canvas.itemcget(canvas_info, "text"))
+    toast("Copied info.")
 
 
-@log_this
 def clipboard_paste(event=None):
     """Paste image from clipboard."""
     global IMAGE, INFO, path_index, paths
@@ -241,20 +237,36 @@ def delete_file(event=None):
         paths_update()
 
 
-def drag_start(e):
-    """Keep start pos for delta move."""
-    canvas.dragx = e.x
-    canvas.dragy = e.y
-
-
-def drag(e):
-    """Drag image."""
-    if e.widget != canvas:
+def drag_begin(event):
+    """Keep drag begin pos for delta move."""
+    if event.widget != canvas:
         return
+    canvas.dragx = canvas.canvasx(event.x)
+    canvas.dragy = canvas.canvasy(event.y)
+    canvas.config(cursor="tcross" if event.num == 1 else "fleur")
+
+
+def drag_end(event):
+    """End drag."""
+    if event.widget != canvas:
+        return
+    canvas.config(cursor="")
+    if (
+        canvas.canvasx(event.x) == canvas.dragx
+        and canvas.canvasy(event.y) == canvas.dragy
+    ):
+        lines_toggle(off=True)
+
+
+def drag(event):
+    """Drag image."""
+    if event.widget != canvas:
+        return
+
     x, y, x2, y2 = canvas.bbox(canvas.image_ref)
     w = x2 - x
     h = y2 - y
-    dx, dy = e.x - canvas.dragx, e.y - canvas.dragy
+    dx, dy = int(event.x - canvas.dragx), int(event.y - canvas.dragy)
     # Keep at least a corner in view.
     # Goes entirely out of view when switching to smaller imag!
     # new_x = max(-w + 64, min(root.winfo_width() - 64, x + dx))
@@ -270,7 +282,20 @@ def drag(e):
     dx, dy = new_x - x, new_y - y
     canvas.move(canvas.image_ref, dx, dy)
     scrollbars_set()
-    canvas.dragx, canvas.dragy = e.x, e.y
+    canvas.dragx, canvas.dragy = event.x, event.y
+
+
+def select(event):
+    """Select areea."""
+    if event.widget != canvas:
+        return
+    lines_toggle(on=True)
+    x = canvas.dragx
+    y = canvas.dragy
+    x2 = canvas.canvasx(event.x)
+    y2 = canvas.canvasy(event.y)
+    canvas.coords(canvas.lines[0], x, y, x2, y, x, y2, x2, y2)
+    canvas.coords(canvas.lines[1], x, y2, x, y, x2, y2, x2, y)
 
 
 @log_this
@@ -290,9 +315,12 @@ def drop_handler(event):
 
 def error_show(msg: str):
     """Show error."""
+    root.title(msg + " - " + TITLE)
     log.error(msg)
     ERROR_OVERLAY.config(text=msg)
     ERROR_OVERLAY.lift()
+    info_set(msg)  # To copy.
+    root.last_index = -1  # To refresh image info.
 
 
 def help_toggle(event=None):
@@ -302,13 +330,13 @@ def help_toggle(event=None):
     else:
         lines = []
         for fun, keys in binds:
-            if "ButtonPress" in keys or "Configure" in keys:
+            if keys in ("ButtonPress", "ButtonRelease", "Configure"):
                 continue
             lines.append(
                 re.sub(
                     "((^|-)[a-z])",
                     lambda m: m.group(1).upper(),
-                    re.sub("(U|T)\\b", "Shift-\\1", keys.replace("Control", "Ctrl")),
+                    re.sub("([TU])\\b", "Shift-\\1", keys.replace("Control", "Ctrl")),
                     0,
                     re.MULTILINE,
                 )
@@ -337,16 +365,19 @@ def info_bg_update():
     canvas.coords(canvas.im_bg, x1, y1, x2, y2)
 
 
-def lines_toggle(event=None):
+def lines_toggle(event=None, on=None, off=None):
     """Toggle line overlay."""
-    global lines_on
-    if canvas.lines:
+    global b_lines
+    b_lines = True if on else False if off else not b_lines  # NOSONAR
+    if not b_lines and canvas.lines:
         for line in canvas.lines:
             canvas.delete(line)
         canvas.lines = []
-    lines_on = not lines_on
-    toast("Lines: %s" % lines_on)
-    resize_handler()
+    if b_lines and not canvas.lines:
+        w = root.winfo_width() - 1
+        h = root.winfo_height() - 1
+        canvas.lines.append(canvas.create_line(0, 0, w, 0, 0, h, w, h, fill="#f00"))  # type: ignore
+        canvas.lines.append(canvas.create_line(0, h, 0, 0, w, h, w, 0, fill="#f00"))  # type: ignore
 
 
 def load_mhtml(path):
@@ -471,7 +502,6 @@ def im_load(path=None):
                 k,
                 str(v)[:80] + "..." if len(str(v)) > 80 else v,
             )
-        log.debug("Loaded info.")
         im_resize(ANIMATION_ON)
     # pylint: disable=W0718
     except (
@@ -482,13 +512,13 @@ def im_load(path=None):
         ValueError,  # NOSONAR
         BufferError,  # NOSONAR
         OSError,  # NOSONAR
+        PermissionError,  # NOSONAR
         BaseException,  # NOSONAR  # https://github.com/PyO3/pyo3/issues/3519
     ) as ex:
         err_msg = f"im_load {type(ex).__name__}: {ex}"
         IMAGE = None
         msg = f"{msg} {err_msg} {path}"
         error_show(msg)
-        root.title(msg + " - " + TITLE)
         raise
 
 
@@ -605,9 +635,35 @@ def im_show(im):
         f" @ {'%sx%s' % im.size} {paths[path_index]}"
     )
     root.title(msg + " - " + TITLE)
-    if root.show_info:
+    if root.show_info and (
+        not hasattr(root, "last_index") or root.last_index != path_index
+    ):
+        root.last_index = path_index
         info_set(msg + info_get())
     scrollbars_set()
+
+
+def info_decode(b: bytes, encoding: str) -> str:
+    """Decodes a sequence of bytes, as stated by the method signature."""
+    if not isinstance(b, bytes):
+        return str(b)
+    print("BYTES!", str(b[:80]), "->", str(b.replace(b"\0", b"")))
+    if b.startswith(b"ASCII\0\0\0"):
+        return str(b[8:])
+    if b.startswith(b"UNICODE\0"):
+        b = b[8:]
+        for enc in (
+            "utf-16-be",  # Works despite EXIF byte order being LE.
+            "utf-16-le",  # Turns utf-16-be text Chinese.
+            encoding,
+            "utf8",  # Leaves \x00 of utf-16-be, which print() leaves out! XXX
+        ):
+            try:
+                log.debug("info_decode %s", enc)
+                return b.decode(enc)
+            except UnicodeDecodeError:
+                pass
+    return str(b.replace(b"\0", b""))
 
 
 def info_get() -> str:
@@ -616,14 +672,17 @@ def info_get() -> str:
     for k, v in INFO.items():
         if k in ("exif", "icc_profile", "photoshop"):
             continue
+
         if k == "comment":
             try:
                 v = v.decode("utf8")
             except UnicodeDecodeError:
                 v = v.decode("utf_16_be")
-            msg += f"\n{k}: {v}"
-        elif k == "exif":
-            msg += f"\n{k}: {(str(v)[:80] + '...') if len(str(v)) > 80 else v}"
+        # Image File Directories (IFD)
+        elif k == "tag_v2":
+            meta_dict = {TiffTags.TAGS_V2[k2]: v2 for k2, v2 in v}
+            log.debug("tag_v2: %s", meta_dict)
+            msg += "\ntag_v2: {meta_dict}\n"
         else:
             msg += f"\n{k}: {v}"
             # msg += f"\n{k}: {(str(v)[:80] + '...') if len(str(v)) > 80 else v}"
@@ -636,13 +695,6 @@ def info_get() -> str:
     except AttributeError:
         pass
 
-    # Image File Directories (IFD)
-    if "tag_v2" in INFO:
-        tv2 = INFO["tag_v2"]
-        meta_dict = {TiffTags.TAGS_V2[k]: v for k, v in tv2}
-        log.debug("tag_v2: %s", meta_dict)
-        msg += "\ntag_v2: {meta_dict}\n"
-
     for fun in (info_exif, info_icc, info_iptc, info_xmp, info_psd, info_exiftool):
         s = fun()
         if s:
@@ -651,93 +703,78 @@ def info_get() -> str:
     return msg
 
 
+def info_exif() -> str:
+    """Return Exchangeable Image File (EXIF) info."""
+    # Workaround from https://github.com/python-pillow/Pillow/issues/5863
+    if not hasattr(IMAGE, "_getexif"):
+        return ""
+
+    exif = IMAGE._getexif()  # type: ignore  # pylint: disable=protected-access
+    if not exif:
+        return ""
+    log.debug("Got exif dict: %s", exif)
+    log.debug("im.exif bytes: %s", INFO["exif"].replace(b"\x00", b""))
+    encoding = "utf_16_be" if b"MM" in INFO["exif"][:8] else "utf_16_le"
+    log.debug("Encoding: %s", encoding)
+    s = f"EXIF: {encoding}"
+    for key, val in exif.items():
+        print("EXIF TAG", key, ExifTags.TAGS.get(key, key))
+        decoded_val = info_decode(val, encoding)
+        log.debug("decoded_val %s", decoded_val)
+        if key in ExifTags.TAGS:
+            s += f"\n{ExifTags.TAGS[key]}: {decoded_val}"
+            if ExifTags.TAGS[key] == "Orientation":
+                s += (
+                    " "
+                    + (
+                        "",
+                        "Normal",
+                        "FLIP_LEFT_RIGHT",
+                        "ROTATE_180",
+                        "FLIP_TOP_BOTTOM",
+                        "TRANSPOSE",
+                        "ROTATE_90",
+                        "TRANSVERSE",
+                        "ROTATE_270",
+                    )[val]
+                )
+        else:
+            s += f"\nUnknown EXIF tag {key}: {val}"
+
+    # Image File Directory (IFD)
+    # exif = IMAGE.getexif()  # type: ignore
+    # for k in ExifTags.IFD:
+    #     try:
+    #         v = exif.get_ifd(k)
+    #         if v:
+    #             s += f"\nIFD tag {k}: {ExifTags.IFD(k).name}: {v}"
+    #     except KeyError:
+    #         log.debug("IFD not found. %s", k)
+    return s.strip()
+
+
 def info_exiftool() -> str:
     """Uses exiftool on path."""
     s = ""
     try:
-        with ExifToolHelper() as et:
-            for d in et.get_metadata(paths[path_index]):
-                for k, v in d.items():
-                    s += f"\n{k}: {v}"
-    except FileNotFoundError:
-        pass
-    return s.strip()
-
-
-def info_exif() -> str:
-    """Return EXIF info."""
-    s = ""
-    # Exchangeable Image File (EXIF)
-    # Workaround from https://github.com/python-pillow/Pillow/issues/5863
-    if hasattr(IMAGE, "_getexif"):
-        exif = IMAGE._getexif()  # type: ignore  # pylint: disable=protected-access
-        if exif:
-            log.debug("Got exif: %s", exif)
-            log.debug("im.exif: %s", INFO["exif"])
-            encoding = "utf_16_be" if b"MM" in INFO["exif"][:8] else "utf_16_le"
-            log.debug("Encoding: %s", encoding)
-            s += f"EXIF: {encoding}"
-            for key, val in exif.items():
-                decoded_val = val
-                print("EXIF TAG", key, ExifTags.TAGS.get(key, key), val)
-                if isinstance(val, bytes):
-                    print("BYTES!", str(val[:80]), str(val.replace(b"\x00", b"")))
-                    if val.startswith(b"ASCII\0\0\0"):
-                        decoded_val = str(val[8:])
-                    elif val.startswith(b"UNICODE\0"):
-                        val = val[8:]
-                        if val.startswith(b"\00"):
-                            log.debug("Invalid Unicode?")
-                            decoded_val = str(val.replace(b"\x00", b""))
-                        else:
-                            try:
-                                decoded_val = val.decode(encoding)
-                                log.debug(
-                                    "==========\nDecoded %s",
-                                    (key, decoded_val, val),
-                                )
-                            except UnicodeDecodeError:
-                                log.error("Failed to decode %s", (encoding, val))
-                                encoding = (
-                                    "utf-16-be"
-                                    if encoding == "utf-16-le"
-                                    else "utf-16-le"
-                                )
-                                decoded_val = val.decode(encoding)
-                                log.debug(
-                                    "==========\nDecoded2 %s",
-                                    (key, decoded_val, encoding),
-                                )
-
-                if key in ExifTags.TAGS:
-                    s += f"\n{ExifTags.TAGS[key]}: {decoded_val}"
-                    if ExifTags.TAGS[key] == "Orientation":
-                        s += (
-                            " "
-                            + (
-                                "",
-                                "Normal",
-                                "FLIP_LEFT_RIGHT",
-                                "ROTATE_180",
-                                "FLIP_TOP_BOTTOM",
-                                "TRANSPOSE",
-                                "ROTATE_90",
-                                "TRANSVERSE",
-                                "ROTATE_270",
-                            )[val]
-                        )
-                else:
-                    s += f"\nUnknown EXIF tag {key}: {val}"
-
-        # Image File Directory (IFD)
-        # exif = IMAGE.getexif()  # type: ignore
-        # for k in ExifTags.IFD:
-        #     try:
-        #         v = exif.get_ifd(k)
-        #         if v:
-        #             s += f"\nIFD tag {k}: {ExifTags.IFD(k).name}: {v}"
-        #     except KeyError:
-        #         log.debug("IFD not found. %s", k)
+        # with ExifToolHelper() as et:
+        #     for d in et.get_metadata(paths[path_index]):
+        #         for k, v in d.items():
+        #             s += f"\n{k}: {v}"
+        output = subprocess.run(
+            ["exiftool", paths[path_index]],
+            capture_output=True,
+            check=False,
+            text=False,
+        )  # text=False to avoid dead thread with uncatchable UnicodeDecodeError: 'charmap' codec can't decode byte 0x8f in position 1749: character maps to <undefined> like https://github.com/smarnach/pyexiftool/issues/20
+        s += (
+            output.stdout and output.stdout.decode("utf8") or ""
+        ) + output.stderr.decode("utf8")
+    except (
+        FileNotFoundError,  # Exiftool not on PATH.
+        UnicodeDecodeError,  # PyExifTool can't handle Parameters data of naughty test\00032-1238577453.png which Exiftool itself handles fine.
+    ) as ex:
+        log.debug("exiftool read fail: %s", ex)
     return s.strip()
 
 
@@ -775,31 +812,32 @@ def info_iptc() -> str:
 
 def info_psd() -> str:
     """Return PhotoShop Document info."""
-    s = ""
-    if "photoshop" in INFO:
-        s += "Photoshop:\n"
-        for k, v in INFO["photoshop"].items():
-            readable_v = re.sub(
-                r"\\x00", "", re.sub(r"(\\x..){2,}", " ", str(v))
-            ).strip()
-            # for enc in ('utf-16-le', 'utf-16-be', 'utf8'):
-            #     try:
-            #         readable_v = v.decode(enc)
-            #         s += f"\nFROM ENCODING {enc}\n"
-            #         break
-            #     except:
-            #         pass
-            if not readable_v or re.match("b'\\s+'", readable_v):
-                # Often binary data like version numbers.
-                if len(v) < 5:
-                    v = int.from_bytes(v, byteorder="big")
-                s += f"{psd_resource_ids.get(k, k)}: {(str(v)[:200] + '...') if len(str(v)) > 200 else v}\n"
-            else:
-                s += f"{psd_resource_ids.get(k, k)}: {readable_v[:200] + '...' if len(readable_v) > 200 else readable_v}\n"
-            if (
-                k == 1036
-            ):  # PS5 thumbnail, https://www.awaresystems.be/imaging/tiff/tifftags/docs/photoshopthumbnail.html
-                continue
+    if "photoshop" not in INFO:
+        return ""
+    s = "Photoshop:\n"
+    for k, v in INFO["photoshop"].items():
+        readable_v = re.sub(r"(\\x..){2,}", " ", str(v)).replace(r"\\x00", "")
+        # readable_v = re.sub(
+        #     r"\\x00", "", re.sub(r"(\\x..){2,}", " ", str(v))
+        # ).strip()
+        # for enc in ('utf-16-le', 'utf-16-be', 'utf8'):
+        #     try:
+        #         readable_v = v.decode(enc)
+        #         s += f"\nFROM ENCODING {enc}\n"
+        #         break
+        #     except:
+        #         pass
+        if not readable_v or re.match("b'\\s+'", readable_v):
+            # Often binary data like version numbers.
+            if len(v) < 5:
+                v = int.from_bytes(v, byteorder="big")
+            s += f"{psd_resource_ids.get(k, k)}: {(str(v)[:200] + '...') if len(str(v)) > 200 else v}\n"
+        else:
+            s += f"{psd_resource_ids.get(k, k)}: {readable_v[:200] + '...' if len(readable_v) > 200 else readable_v}\n"
+        if (
+            k == 1036
+        ):  # PS5 thumbnail, https://www.awaresystems.be/imaging/tiff/tifftags/docs/photoshopthumbnail.html
+            continue
 
     return s.strip()
 
@@ -977,17 +1015,7 @@ def resize_handler(event=None):
     """Handle Tk resize event."""
     global WINDOW_SIZE
     new_size = root.winfo_geometry().split("+", maxsplit=1)[0]
-
-    if lines_on:
-        w = root.winfo_width() - 1
-        h = root.winfo_height() - 1
-        if not canvas.lines:
-            canvas.lines.append(canvas.create_line(0, 0, w, 0, 0, h, w, h, fill="#f00"))  # type: ignore
-            canvas.lines.append(canvas.create_line(0, h, 0, 0, w, h, w, 0, fill="#f00"))  # type: ignore
-        else:
-            canvas.coords(canvas.lines[0], 0, 0, w, 0, 0, h, w, h)
-            canvas.coords(canvas.lines[1], 0, h, 0, 0, w, h, w, 0)
-
+    # Resize selection?
     if WINDOW_SIZE != new_size:
         ERROR_OVERLAY.config(wraplength=event.width)
         TOAST.config(wraplength=event.width)
@@ -1381,11 +1409,13 @@ binds = [
     (path_save, "s"),
     (paths_update, "u F5"),
     (refresh_toggle, "U"),
-    (clipboard_copy, "Control-c"),
-    (clipboard_paste, "Control-v"),
+    (clipboard_copy, "Control-c Control-Insert"),
+    (clipboard_paste, "Control-v Shift-Insert"),
     (set_verbosity, "v"),
-    (drag, "B1-Motion B2-Motion"),
-    (drag_start, "ButtonPress"),
+    (select, "B1-Motion"),
+    (drag, "B2-Motion"),
+    (drag_begin, "ButtonPress"),
+    (drag_end, "ButtonRelease"),
     (menu_show, "Button-3"),  # Or rather tk_popup in Ubuntu?
     (lines_toggle, "l"),
     (resize_handler, "Configure"),
@@ -1446,10 +1476,12 @@ def main(args):
         if fun in (
             browse_frame,
             drag,
-            drag_start,
+            drag_begin,
+            drag_end,
             menu_show,
             resize_handler,
             scroll,
+            select,
             zoom,
             zoom_text,
         ):

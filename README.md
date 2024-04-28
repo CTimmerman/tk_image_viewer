@@ -60,10 +60,11 @@ P - Pick a file to open.
 S - Save file as.
 U F5 - Update path info.
 Shift-U - Toggle autoupdate.
-Ctrl-C - Copy info to clipboard while app is running.
-Ctrl-V - Paste image from clipboard.
+Ctrl-C Ctrl-Insert - Copy info to clipboard.
+Ctrl-V Shift-Insert - Paste image from clipboard.
 V - Set verbosity.
-B1-Motion B2-Motion - Drag image.
+B1-Motion - Select area.
+B2-Motion - Drag image.
 Button-3 - Show menu.
 L - Toggle line overlay.
 ```
