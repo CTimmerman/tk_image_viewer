@@ -164,7 +164,7 @@ def browse_frame(event=None):
 
 def clipboard_copy(event=None):
     """Copy info to clipboard."""
-    pyperclip.copy(canvas.itemcget(canvas_info, "text"))
+    pyperclip.copy(CANVAS.itemcget(canvas_info, "text"))
     toast("Copied info.")
 
 
@@ -220,37 +220,39 @@ def delete_file(event=None):
         paths_update()
 
 
+@log_this
 def drag_begin(event):
     """Keep drag begin pos for delta move."""
-    if event.widget != canvas:
+    if event.widget != CANVAS:
         return
-    canvas.dragx = canvas.canvasx(event.x)
-    canvas.dragy = canvas.canvasy(event.y)
-    canvas.config(cursor="tcross" if event.num == 1 else "fleur")
+    CANVAS.dragx = CANVAS.canvasx(event.x)
+    CANVAS.dragy = CANVAS.canvasy(event.y)
+    CANVAS.config(cursor="tcross" if event.num == 1 else "fleur")
 
 
+@log_this
 def drag_end(event):
     """End drag."""
-    if event.widget != canvas:
+    if event.widget != CANVAS:
         return
-    canvas.config(cursor="")
+    CANVAS.config(cursor="")
     if (
-        canvas.canvasx(event.x) == canvas.dragx
-        and canvas.canvasy(event.y) == canvas.dragy
+        CANVAS.canvasx(event.x) == CANVAS.dragx
+        and CANVAS.canvasy(event.y) == CANVAS.dragy
     ):
         lines_toggle(off=True)
 
 
 def drag(event):
     """Drag image."""
-    if event.widget != canvas:
+    if event.widget != CANVAS:
         return
 
-    evx, evy = canvas.canvasx(event.x), canvas.canvasy(event.y)
-    x, y, x2, y2 = canvas.bbox(canvas.image_ref)
+    evx, evy = CANVAS.canvasx(event.x), CANVAS.canvasy(event.y)
+    x, y, x2, y2 = CANVAS.bbox(CANVAS.image_ref)
     w = x2 - x
     h = y2 - y
-    dx, dy = int(evx - canvas.dragx), int(evy - canvas.dragy)
+    dx, dy = int(evx - CANVAS.dragx), int(evy - CANVAS.dragy)
     # Keep at least a corner in view.
     # Goes entirely out of view when switching to smaller imag!
     # new_x = max(-w + 64, min(root.winfo_width() - 64, x + dx))
@@ -259,27 +261,27 @@ def drag(event):
     new_x = max(0, min(root.winfo_width() - w, x + dx))
     new_y = max(0, min(root.winfo_height() - h, y + dy))
     if new_x == 0:
-        canvas.xview_scroll(-dx, "units")
+        CANVAS.xview_scroll(-dx, "units")
     if new_y == 0:
-        canvas.yview_scroll(-dy, "units")
+        CANVAS.yview_scroll(-dy, "units")
 
     dx, dy = new_x - x, new_y - y
-    canvas.move(canvas.image_ref, dx, dy)
+    CANVAS.move(CANVAS.image_ref, dx, dy)
     scrollbars_set()
-    canvas.dragx, canvas.dragy = evx, evy
+    CANVAS.dragx, CANVAS.dragy = evx, evy
 
 
 def select(event):
     """Select area."""
-    if event.widget != canvas:
+    if event.widget != CANVAS:
         return
     lines_toggle(on=True)
-    x = canvas.dragx
-    y = canvas.dragy
-    x2 = canvas.canvasx(event.x)
-    y2 = canvas.canvasy(event.y)
-    canvas.coords(canvas.lines[0], x, y, x2, y, x, y2, x2, y2)
-    canvas.coords(canvas.lines[1], x, y2, x, y, x2, y2, x2, y)
+    x = CANVAS.dragx
+    y = CANVAS.dragy
+    x2 = CANVAS.canvasx(event.x)
+    y2 = CANVAS.canvasy(event.y)
+    CANVAS.coords(CANVAS.lines[0], x, y, x2, y, x, y2, x2, y2)
+    CANVAS.coords(CANVAS.lines[1], x, y2, x, y, x2, y2, x2, y)
 
 
 @log_this
@@ -303,12 +305,12 @@ def error_show(msg: str):
     ERROR_OVERLAY.config(text=msg)
     ERROR_OVERLAY.lift()
     info_set(msg)  # To copy.
-    root.last_index = -1  # To refresh image info.
+    root.i_path_old = -1  # To refresh image info.
 
 
 def help_toggle(event=None):
     """Toggle help."""
-    if root.show_info and canvas.itemcget(canvas_info, "text").startswith("C - Set"):
+    if root.show_info and CANVAS.itemcget(canvas_info, "text").startswith("C - Set"):
         info_hide()
     else:
         lines = []
@@ -317,7 +319,7 @@ def help_toggle(event=None):
                 continue
             lines.append(
                 re.sub(
-                    "((^|-)[a-z])",
+                    "((^|[+])[a-z])",
                     lambda m: m.group(1).upper(),
                     re.sub(
                         "([QTU])\\b",
@@ -340,32 +342,32 @@ def help_toggle(event=None):
 
 def info_set(msg: str):
     """Change info text."""
-    canvas.itemconfig(canvas_info, text=msg)  # type: ignore
+    CANVAS.itemconfig(canvas_info, text=msg)  # type: ignore
     info_bg_update()
 
 
 def info_bg_update():
     """Update info overlay."""
-    x1, y1, x2, y2 = canvas.bbox(canvas_info)
-    canvas.overlay_tkim = ImageTk.PhotoImage(  # type: ignore
+    x1, y1, x2, y2 = CANVAS.bbox(canvas_info)
+    CANVAS.overlay_tkim = ImageTk.PhotoImage(  # type: ignore
         Image.new("RGBA", (x2 - x1, y2 - y1), "#000a")
     )
-    canvas.itemconfig(canvas.overlay, image=canvas.overlay_tkim)  # type: ignore
-    canvas.coords(canvas.im_bg, x1, y1, x2, y2)
+    CANVAS.itemconfig(CANVAS.overlay, image=CANVAS.overlay_tkim)  # type: ignore
+    CANVAS.coords(CANVAS.im_bg, x1, y1, x2, y2)
 
 
 def lines_toggle(event=None, on=None, off=None):
     """Toggle line overlay."""
     root.b_lines = True if on else False if off else not root.b_lines  # NOSONAR
-    if not root.b_lines and canvas.lines:
-        for line in canvas.lines:
-            canvas.delete(line)
-        canvas.lines = []
-    if root.b_lines and not canvas.lines:
+    if not root.b_lines and CANVAS.lines:
+        for line in CANVAS.lines:
+            CANVAS.delete(line)
+        CANVAS.lines = []
+    if root.b_lines and not CANVAS.lines:
         w = root.winfo_width() - 1
         h = root.winfo_height() - 1
-        canvas.lines.append(canvas.create_line(0, 0, w, 0, 0, h, w, h, fill="#f00"))  # type: ignore
-        canvas.lines.append(canvas.create_line(0, h, 0, 0, w, h, w, 0, fill="#f00"))  # type: ignore
+        CANVAS.lines.append(CANVAS.create_line(0, 0, w, 0, 0, h, w, h, fill="#f00"))  # type: ignore
+        CANVAS.lines.append(CANVAS.create_line(0, h, 0, 0, w, h, w, 0, fill="#f00"))  # type: ignore
 
 
 def load_mhtml(path):
@@ -386,6 +388,7 @@ def load_mhtml(path):
         name = sorted(meta.strip().split("\n"))[0].split("/")[-1]
         root.info["Names"].append(name)
         new_parts.append(data)
+    log.debug("%s", f"Getting part {root.i_zip}/{len(new_parts)} of {len(parts)}.")
     data = new_parts[root.i_zip]
     try:
         im_file = BytesIO(base64.standard_b64decode(data.rstrip()))
@@ -573,7 +576,7 @@ def im_resize(loop=False):
             root.im.seek(root.im_frame)
         except EOFError as ex:
             log.error("IMAGE EOF. %s", ex)
-        duration = (root.info["duration"] or 100) if "duration" in root.info else 100
+        duration = int(root.info["duration"] or 100) if "duration" in root.info else 100
         if hasattr(root, "animation"):
             root.after_cancel(root.animation)
         root.animation = root.after(duration, im_resize, root.b_animate)
@@ -582,18 +585,18 @@ def im_resize(loop=False):
 def im_show(im):
     """Show PIL image in Tk image widget."""
     try:
-        canvas.tkim: ImageTk.PhotoImage = ImageTk.PhotoImage(im)  # type: ignore
-        canvas.itemconfig(canvas.image_ref, image=canvas.tkim, anchor="center")
+        CANVAS.tkim: ImageTk.PhotoImage = ImageTk.PhotoImage(im)  # type: ignore
+        CANVAS.itemconfig(CANVAS.image_ref, image=CANVAS.tkim, anchor="center")
 
         try:
             rw, rh = root.winfo_width(), root.winfo_height()
-            x, y, x2, y2 = canvas.bbox(canvas.image_ref)
+            x, y, x2, y2 = CANVAS.bbox(CANVAS.image_ref)
             w = x2 - x
             h = y2 - y
             good_x = rw // 2 - w // 2
             good_y = rh // 2 - h // 2
             # canvas.move(canvas.image_ref, -x + canvas.winfo_width() // 2, -y + canvas.winfo_height() // 2)
-            canvas.move(canvas.image_ref, good_x - x, good_y - y)
+            CANVAS.move(CANVAS.image_ref, good_x - x, good_y - y)
         except TypeError as ex:
             log.error(ex)
 
@@ -615,9 +618,13 @@ def im_show(im):
     )
     root.title(msg + " - " + TITLE)
     if root.show_info and (
-        not hasattr(root, "last_index") or root.last_index != root.i_path
+        not hasattr(root, "i_path_old")
+        or root.i_path != root.i_path_old
+        or not hasattr(root, "i_path_old")
+        or root.i_zip != root.i_zip_old
     ):
-        root.last_index = root.i_path
+        root.i_path_old = root.i_path
+        root.i_zip_old = root.i_zip
         info_set(msg + info_get())
     scrollbars_set()
 
@@ -628,7 +635,7 @@ def info_decode(b: bytes, encoding: str) -> str:
         return str(b)
     print("BYTES!", str(b[:80]), "->", str(b.replace(b"\0", b"")))
     if b.startswith(b"ASCII\0\0\0"):
-        return str(b[8:])
+        return b[8:].decode("ascii")
     if b.startswith(b"UNICODE\0"):
         b = b[8:]
         for enc in (
@@ -642,14 +649,15 @@ def info_decode(b: bytes, encoding: str) -> str:
                 return b.decode(enc)
             except UnicodeDecodeError:
                 pass
-    return str(b.replace(b"\0", b""))
+    return b.decode("ansi")
+    # return str(b.replace(b"\0", b""))
 
 
 def info_get() -> str:
     """Get image info."""
     msg = ""
     for k, v in root.info.items():
-        if k in ("exif", "icc_profile", "photoshop", "XML:com.adobe.xmp"):
+        if k in ("exif", "icc_profile", "photoshop", "XML:com.adobe.xmp", "Names"):
             continue
 
         if k == "comment":
@@ -701,22 +709,32 @@ def info_exif() -> str:
         decoded_val = info_decode(val, encoding)
         log.debug("decoded_val %s", decoded_val)
         if key in ExifTags.TAGS:
-            s += f"\n{ExifTags.TAGS[key]}: {decoded_val}"
-            if ExifTags.TAGS[key] == "Orientation":
+            key_name = ExifTags.TAGS[key]
+            s += f"\n{key_name}: "
+            if key_name == "ColorSpace":
+                s += "Uncalibrated" if val == 65535 else val
+            elif key_name == "ComponentsConfiguration":
+                s += "Y, Cb, Cr, -" if val == b"\x01\x02\x03\x00" else str(val)
+            elif key_name == "Orientation":
                 s += (
-                    " "
-                    + (
-                        "",
-                        "Normal",
-                        "FLIP_LEFT_RIGHT",
-                        "ROTATE_180",
-                        "FLIP_TOP_BOTTOM",
-                        "TRANSPOSE",
-                        "ROTATE_90",
-                        "TRANSVERSE",
-                        "ROTATE_270",
-                    )[val]
-                )
+                    "",
+                    "Normal",
+                    "FLIP_LEFT_RIGHT",
+                    "ROTATE_180",
+                    "FLIP_TOP_BOTTOM",
+                    "TRANSPOSE",
+                    "ROTATE_90",
+                    "TRANSVERSE",
+                    "ROTATE_270",
+                )[val]
+            elif key_name == "ResolutionUnit":
+                s += {2: "inch", 3: "cm"}.get(val, val)
+            elif key_name == "YCbCrPositioning":
+                s += {
+                    1: "Centered",
+                }.get(val, val)
+            else:
+                s += f"{decoded_val}"
         else:
             s += f"\nUnknown EXIF tag {key}: {val}"
 
@@ -840,9 +858,9 @@ def info_xmp() -> str:
 
 def info_toggle(event=None):
     """Toggle info overlay."""
-    if not root.show_info or canvas.itemcget(canvas_info, "text").startswith("C - Set"):
+    if not root.show_info or CANVAS.itemcget(canvas_info, "text").startswith("C - Set"):
         info_set(root.title() + info_get())
-        log.debug("Showing info:\n%s", canvas.itemcget(canvas_info, "text"))
+        log.debug("Showing info:\n%s", CANVAS.itemcget(canvas_info, "text"))
         info_show()
     else:
         info_hide()
@@ -851,23 +869,23 @@ def info_toggle(event=None):
 def info_show():
     """Show info overlay."""
     root.show_info = True
-    canvas.lift(canvas.overlay)
-    canvas.lift(canvas_info)
+    CANVAS.lift(CANVAS.overlay)
+    CANVAS.lift(canvas_info)
     scrollbars_set()
 
 
 def info_hide():
     """Hide info overlay."""
     root.show_info = False
-    canvas.lower(canvas.overlay)
-    canvas.lower(canvas_info)
-    info_set(canvas.itemcget(canvas_info, "text")[:7])
+    CANVAS.lower(CANVAS.overlay)
+    CANVAS.lower(canvas_info)
+    info_set(CANVAS.itemcget(canvas_info, "text")[:7])
     scrollbars_set()
 
 
 def menu_show(event):
     """Show menu."""
-    menu.post(event.x_root, event.y_root)
+    MENU.post(event.x_root, event.y_root)
 
 
 def natural_sort(s):
@@ -996,11 +1014,11 @@ def resize_handler(event=None):
     if root.s_geo != new_size:
         ERROR_OVERLAY.config(wraplength=event.width)
         TOAST.config(wraplength=event.width)
-        bb = canvas.bbox(canvas_info)
-        canvas.itemconfig(canvas_info, width=event.width - 16)
-        canvas.coords(canvas.im_bg, 0, 0, event.width, event.height)
+        bb = CANVAS.bbox(canvas_info)
+        CANVAS.itemconfig(canvas_info, width=event.width - 16)
+        CANVAS.coords(CANVAS.im_bg, 0, 0, event.width, event.height)
 
-        if bb != canvas.bbox(canvas_info):
+        if bb != CANVAS.bbox(canvas_info):
             info_bg_update()
 
         if root.s_geo and root.fit:
@@ -1014,19 +1032,19 @@ def scroll(event):
     """Scroll."""
     k = event.keysym
     if k == "Left":
-        canvas.xview_scroll(-10, "units")
+        CANVAS.xview_scroll(-10, "units")
     elif k == "Right":
-        canvas.xview_scroll(10, "units")
+        CANVAS.xview_scroll(10, "units")
     if k == "Up":
-        canvas.yview_scroll(-10, "units")
+        CANVAS.yview_scroll(-10, "units")
     elif k == "Down":
-        canvas.yview_scroll(10, "units")
+        CANVAS.yview_scroll(10, "units")
 
 
 def scrollbars_set():
     """Hide/show scrollbars."""
     try:
-        x, y, x2, y2 = canvas.bbox(canvas.image_ref, canvas_info)
+        x, y, x2, y2 = CANVAS.bbox(CANVAS.image_ref, canvas_info)
         w = x2 - x
         h = y2 - y
         sv = max(0, y) + h > root.winfo_height()
@@ -1047,10 +1065,10 @@ def scrollbars_set():
             scrolly.lower()
 
         scrollregion = (min(x, 0), min(y, 0), x + w, y + h)
-        canvas.config(scrollregion=scrollregion)
+        CANVAS.config(scrollregion=scrollregion)
         if root.i_path != root.i_scroll:
-            canvas.xview_moveto(0)
-            canvas.yview_moveto(0)
+            CANVAS.xview_moveto(0)
+            CANVAS.yview_moveto(0)
             root.i_scroll = root.i_path
     except TypeError as ex:
         log.error(ex)
@@ -1063,10 +1081,10 @@ def set_bg(event=None):
         root.i_bg = 0
     bg = BG_COLORS[root.i_bg]
     root.config(bg=bg)
-    canvas.config(bg=bg)
-    canvas.itemconfig(canvas.im_bg, fill=bg)
+    CANVAS.config(bg=bg)
+    CANVAS.itemconfig(CANVAS.im_bg, fill=bg)
     ERROR_OVERLAY.config(bg=bg)
-    menu.config(bg=bg, fg="black" if root.i_bg == len(BG_COLORS) - 1 else "white")
+    MENU.config(bg=bg, fg="black" if root.i_bg == len(BG_COLORS) - 1 else "white")
 
 
 @log_this
@@ -1152,7 +1170,6 @@ def set_supported_files():
     )
 
 
-@log_this
 def quality_set(event=None):
     """Set resize quality."""
     i = RESIZE_QUALITY.index(root.quality)
@@ -1299,7 +1316,7 @@ def zoom_text(event):
 
     ERROR_OVERLAY.config(font=("Consolas", new_font_size))
     TOAST.config(font=("Consolas", new_font_size * 2))
-    canvas.itemconfig(canvas_info, font=("Consolas", new_font_size))
+    CANVAS.itemconfig(canvas_info, font=("Consolas", new_font_size))
     info_bg_update()
 
 
@@ -1326,11 +1343,14 @@ TOAST = tkinter.Label(
 )
 TOAST.place(x=0, y=0)
 
-canvas = tkinter.Canvas(bg="blue", borderwidth=0, highlightthickness=0, relief="flat")
-canvas.lines = []  # type: ignore
-canvas.place(x=0, y=0, relwidth=1, relheight=1)
-canvas.overlay = canvas.create_image(0, 0, anchor="nw")  # type: ignore
-canvas_info = canvas.create_text(
+CANVAS = tkinter.Canvas(bg="blue", borderwidth=0, highlightthickness=0, relief="flat")
+# Opening the context menu only triggers drag_end.
+CANVAS.dragx = 0  # type: ignore
+CANVAS.dragy = 0  # type: ignore
+CANVAS.lines = []  # type: ignore
+CANVAS.place(x=0, y=0, relwidth=1, relheight=1)
+CANVAS.overlay = CANVAS.create_image(0, 0, anchor="nw")  # type: ignore
+canvas_info = CANVAS.create_text(
     1,  # If 0, bbox starts at -1.
     0,
     anchor="nw",
@@ -1339,14 +1359,14 @@ canvas_info = canvas.create_text(
     font=("Consolas", FONT_SIZE),
     width=root_w,
 )
-canvas.im_bg = canvas.create_rectangle(0, 0, root_w, root_h, fill="black", width=0)  # type: ignore
-canvas.image_ref = canvas.create_image(root_w // 2, root_h // 2, anchor="center")  # type: ignore
+CANVAS.im_bg = CANVAS.create_rectangle(0, 0, root_w, root_h, fill="black", width=0)  # type: ignore
+CANVAS.image_ref = CANVAS.create_image(root_w // 2, root_h // 2, anchor="center")  # type: ignore
 root.update()
-scrollx = tkinter.Scrollbar(root, orient="horizontal", command=canvas.xview)
+scrollx = tkinter.Scrollbar(root, orient="horizontal", command=CANVAS.xview)
 scrollx.place(x=0, y=1, relwidth=1, relx=1, rely=1, anchor="se")
-scrolly = tkinter.Scrollbar(root, command=canvas.yview)
+scrolly = tkinter.Scrollbar(root, command=CANVAS.yview)
 scrolly.place(x=1, y=0, relheight=1, relx=1, rely=1, anchor="se")
-canvas.config(
+CANVAS.config(
     xscrollcommand=scrollx.set,
     xscrollincrement=1,
     yscrollcommand=scrolly.set,
@@ -1401,7 +1421,7 @@ binds = [
     (resize_handler, "Configure"),
 ]
 
-menu = tkinter.Menu(root, tearoff=0)
+MENU = tkinter.Menu(root, tearoff=0)
 
 
 def main(args):
@@ -1476,9 +1496,9 @@ def main(args):
             continue
         if re.match("[a-z]( |$)", keys):
             lbl = f"{fun.__doc__[:-1].title()} ({keys[0].upper()})"
-            menu.add_command(label=lbl, command=fun, underline=len(lbl) - 2)
+            MENU.add_command(label=lbl, command=fun, underline=len(lbl) - 2)
         else:
-            menu.add_command(label=fun.__doc__[:-1].title(), command=fun)
+            MENU.add_command(label=fun.__doc__[:-1].title(), command=fun)
 
     set_bg()
     root.mainloop()
