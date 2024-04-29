@@ -17,6 +17,7 @@ from tkinter import filedialog, messagebox
 # from exiftool import ExifToolHelper  # type: ignore  # Needs exiftool in path.
 import pillow_avif  # type: ignore  # noqa: F401  # pylint: disable=E0401
 import pillow_jxl  # noqa: F401
+import pyperclip  # type: ignore
 import yaml
 from PIL import ExifTags, Image, ImageCms, ImageGrab, ImageTk, IptcImagePlugin, TiffTags
 from PIL.Image import Transpose
@@ -41,7 +42,6 @@ class Fits(enum.IntEnum):
 ANIMATION_ON: bool = True
 BG_COLORS = ["black", "gray10", "gray50", "white"]
 BG_INDEX = -1
-FIT = 0
 FONT_SIZE = 14
 IMAGE: Image.Image | None = None
 IM_FRAME = 0
@@ -50,12 +50,11 @@ b_lines: bool = False
 OLD_INDEX = -1
 QUALITY = Image.Resampling.NEAREST  # 0
 REFRESH_INTERVAL = -4000
-SCALE = 1.0
+scale: float = 1.0
 SCALE_MIN = 0.001
 SCALE_MAX = 40.0
-SCALE_TEXT = 1.0
+scale_text: float = 1.0
 SORTS = "natural string ctime mtime size".split()
-SORT = "natural"
 TITLE = __doc__.split("\n", 1)[0]
 TRANSPOSE_INDEX = -1
 VERBOSITY_LEVELS = [
@@ -178,9 +177,8 @@ def browse_frame(event=None):
 
 
 def clipboard_copy(event=None):
-    """Copy info to clipboard while app is running."""
-    root.clipboard_clear()
-    root.clipboard_append(canvas.itemcget(canvas_info, "text"))
+    """Copy info to clipboard."""
+    pyperclip.copy(canvas.itemcget(canvas_info, "text"))
     toast("Copied info.")
 
 
@@ -263,10 +261,11 @@ def drag(event):
     if event.widget != canvas:
         return
 
+    evx, evy = canvas.canvasx(event.x), canvas.canvasy(event.y)
     x, y, x2, y2 = canvas.bbox(canvas.image_ref)
     w = x2 - x
     h = y2 - y
-    dx, dy = int(event.x - canvas.dragx), int(event.y - canvas.dragy)
+    dx, dy = int(evx - canvas.dragx), int(evy - canvas.dragy)
     # Keep at least a corner in view.
     # Goes entirely out of view when switching to smaller imag!
     # new_x = max(-w + 64, min(root.winfo_width() - 64, x + dx))
@@ -282,11 +281,11 @@ def drag(event):
     dx, dy = new_x - x, new_y - y
     canvas.move(canvas.image_ref, dx, dy)
     scrollbars_set()
-    canvas.dragx, canvas.dragy = event.x, event.y
+    canvas.dragx, canvas.dragy = evx, evy
 
 
 def select(event):
-    """Select areea."""
+    """Select area."""
     if event.widget != canvas:
         return
     lines_toggle(on=True)
@@ -528,9 +527,9 @@ def get_fit_ratio(im_w, im_h):
     w = root.winfo_width()
     h = root.winfo_height()
     if (
-        ((FIT == Fits.ALL) and (im_w != w or im_h != h))
-        or ((FIT == Fits.BIG) and (im_w > w or im_h > h))
-        or ((FIT == Fits.SMALL) and (im_w < w and im_h < h))
+        ((root.fit == Fits.ALL) and (im_w != w or im_h != h))
+        or ((root.fit == Fits.BIG) and (im_w > w or im_h > h))
+        or ((root.fit == Fits.SMALL) and (im_w < w and im_h < h))
     ):
         ratio = min(w / im_w, h / im_h)
     return ratio
@@ -547,22 +546,22 @@ def im_fit(im):
 
 def im_scale(im):
     """Scale image."""
-    global SCALE
-    log.debug("Scaling to %s", SCALE)
+    global scale
+    log.debug("Scaling to %s", scale)
     im_w, im_h = im.size
-    ratio = SCALE * get_fit_ratio(im_w, im_h)
+    ratio = scale * get_fit_ratio(im_w, im_h)
     try:
         new_w = int(ratio * im_w)
         new_h = int(ratio * im_h)
         if new_w < 1 or new_h < 1:
             log.error("Too small. Scaling up.")
-            SCALE = max(SCALE_MIN, min(SCALE * 1.1, SCALE_MAX))
+            scale = max(SCALE_MIN, min(scale * 1.1, SCALE_MAX))
             im = im_scale(im)
         else:
             im = IMAGE.resize((new_w, new_h), QUALITY)
     except MemoryError as ex:
         log.error("Out of memory. Scaling down. %s", ex)
-        SCALE = max(SCALE_MIN, min(SCALE * 0.9, SCALE_MAX))
+        scale = max(SCALE_MIN, min(scale * 0.9, SCALE_MAX))
 
     return im
 
@@ -575,10 +574,10 @@ def im_resize(loop=False):
 
     im = IMAGE.copy()
 
-    if FIT:
+    if root.fit:
         im = im_fit(IMAGE)
 
-    if SCALE != 1:
+    if scale != 1:
         im = im_scale(IMAGE)
 
     if TRANSPOSE_INDEX != -1:
@@ -601,7 +600,7 @@ def im_resize(loop=False):
 
 def im_show(im):
     """Show PIL image in Tk image widget."""
-    global SCALE
+    global scale
     try:
         canvas.tkim: ImageTk.PhotoImage = ImageTk.PhotoImage(im)  # type: ignore
         canvas.itemconfig(canvas.image_ref, image=canvas.tkim, anchor="center")
@@ -622,7 +621,7 @@ def im_show(im):
         ERROR_OVERLAY.lower()
     except MemoryError as ex:
         log.error("Out of memory. Scaling down. %s", ex)
-        SCALE = max(SCALE_MIN, min(SCALE * 0.9, SCALE_MAX))
+        scale = max(SCALE_MIN, min(scale * 0.9, SCALE_MAX))
         return
 
     zip_info = (
@@ -656,7 +655,7 @@ def info_decode(b: bytes, encoding: str) -> str:
             "utf-16-be",  # Works despite EXIF byte order being LE.
             "utf-16-le",  # Turns utf-16-be text Chinese.
             encoding,
-            "utf8",  # Leaves \x00 of utf-16-be, which print() leaves out! XXX
+            "utf8",  # Leaves \0 of utf-16-be, which print() leaves out! XXX
         ):
             try:
                 log.debug("info_decode %s", enc)
@@ -670,7 +669,7 @@ def info_get() -> str:
     """Get image info."""
     msg = ""
     for k, v in INFO.items():
-        if k in ("exif", "icc_profile", "photoshop"):
+        if k in ("exif", "icc_profile", "photoshop", "XML:com.adobe.xmp"):
             continue
 
         if k == "comment":
@@ -713,7 +712,7 @@ def info_exif() -> str:
     if not exif:
         return ""
     log.debug("Got exif dict: %s", exif)
-    log.debug("im.exif bytes: %s", INFO["exif"].replace(b"\x00", b""))
+    log.debug("im.exif bytes: %s", INFO["exif"].replace(b"\0", b""))
     encoding = "utf_16_be" if b"MM" in INFO["exif"][:8] else "utf_16_le"
     log.debug("Encoding: %s", encoding)
     s = f"EXIF: {encoding}"
@@ -768,8 +767,8 @@ def info_exiftool() -> str:
             text=False,
         )  # text=False to avoid dead thread with uncatchable UnicodeDecodeError: 'charmap' codec can't decode byte 0x8f in position 1749: character maps to <undefined> like https://github.com/smarnach/pyexiftool/issues/20
         s += (
-            output.stdout and output.stdout.decode("utf8") or ""
-        ) + output.stderr.decode("utf8")
+            output.stdout and output.stdout.decode("utf8").replace("\r", "") or ""
+        ) + output.stderr.decode("utf8").replace("\r", "")
     except (
         FileNotFoundError,  # Exiftool not on PATH.
         UnicodeDecodeError,  # PyExifTool can't handle Parameters data of naughty test\00032-1238577453.png which Exiftool itself handles fine.
@@ -816,9 +815,9 @@ def info_psd() -> str:
         return ""
     s = "Photoshop:\n"
     for k, v in INFO["photoshop"].items():
-        readable_v = re.sub(r"(\\x..){2,}", " ", str(v)).replace(r"\\x00", "")
+        readable_v = re.sub(r"(\\x..){2,}", " ", str(v)).replace(r"\\0", "")
         # readable_v = re.sub(
-        #     r"\\x00", "", re.sub(r"(\\x..){2,}", " ", str(v))
+        #     r"\\0", "", re.sub(r"(\\x..){2,}", " ", str(v))
         # ).strip()
         # for enc in ('utf-16-le', 'utf-16-be', 'utf8'):
         #     try:
@@ -942,7 +941,7 @@ def path_save(event=None):
 def paths_sort(path=None):
     """Sort paths."""
     global path_index
-    log.debug("Sorting %s", SORT)
+    log.debug("Sorting %s", root.sort)
     if path:
         try:
             path_index = paths.index(pathlib.Path(path))
@@ -953,7 +952,7 @@ def paths_sort(path=None):
     else:
         return
 
-    for s in SORT.split(","):
+    for s in root.sort.split(","):
         if s == "natural":
             paths.sort(key=natural_sort)
         elif s == "ctime":
@@ -1026,7 +1025,7 @@ def resize_handler(event=None):
         if bb != canvas.bbox(canvas_info):
             info_bg_update()
 
-        if WINDOW_SIZE and FIT:
+        if WINDOW_SIZE and root.fit:
             im_resize()
         else:
             scrollbars_set()
@@ -1097,11 +1096,10 @@ def set_bg(event=None):
 @log_this
 def set_order(event=None):
     """Set order."""
-    global SORT
-    i = SORTS.index(SORT) if SORT in SORTS else -1
+    i = SORTS.index(root.sort) if root.sort in SORTS else -1
     i = (i + 1) % len(SORTS)
-    SORT = SORTS[i]
-    s = "Sort: " + SORT
+    root.sort = SORTS[i]
+    s = "Sort: " + root.sort
     log.info(s)
     toast(s)
     paths_sort()
@@ -1196,18 +1194,18 @@ def set_verbosity(event=None):
 
 def slideshow_run(event=None):
     """Run slideshow."""
-    if SLIDESHOW_ON:
+    if b_slideshow:
         browse()
-        root.after(SLIDESHOW_PAUSE, slideshow_run)
+        root.after(slideshow_pause, slideshow_run)
 
 
 def slideshow_toggle(event=None):
     """Toggle slideshow."""
-    global SLIDESHOW_ON
-    SLIDESHOW_ON = not SLIDESHOW_ON
-    if SLIDESHOW_ON:
+    global b_slideshow
+    b_slideshow = not b_slideshow
+    if b_slideshow:
         toast("Starting slideshow.")
-        root.after(SLIDESHOW_PAUSE, slideshow_run)
+        root.after(slideshow_pause, slideshow_run)
     else:
         toast("Stopping slideshow.")
 
@@ -1241,9 +1239,8 @@ def transpose_set(event=None):
 @log_this
 def fit_handler(event=None):
     """Resize type to fit window."""
-    global FIT
-    FIT = (FIT + 1) % len(Fits)
-    toast(str(Fits(FIT)))
+    root.fit = (root.fit + 1) % len(Fits)
+    toast(str(Fits(root.fit)))
     im_resize()
 
 
@@ -1280,41 +1277,41 @@ def str2float(s: str) -> float:
 
 def zoom(event):
     """Zoom."""
-    global SCALE
+    global scale
     k = event.keysym
     if event.num == 5 or event.delta > 0:
         k = "plus"
     if event.num == 4 or event.delta < 0:
         k = "minus"
     if k in ("plus", "equal"):
-        SCALE *= 1.1
+        scale *= 1.1
     elif k == "minus":
-        SCALE *= 0.9
+        scale *= 0.9
     else:
-        SCALE = 1
-    SCALE = max(SCALE_MIN, min(SCALE, SCALE_MAX))
+        scale = 1
+    scale = max(SCALE_MIN, min(scale, SCALE_MAX))
     im_resize()
 
 
 @log_this
 def zoom_text(event):
     """Zoom text."""
-    global SCALE_TEXT
+    global scale_text
     k = event.keysym
     if event.num == 5 or event.delta > 0:
         k = "plus"
     if event.num == 4 or event.delta < 0:
         k = "minus"
     if k in ("plus", "equal"):
-        SCALE_TEXT *= 1.1
+        scale_text *= 1.1
     elif k == "minus":
-        SCALE_TEXT *= 0.9
+        scale_text *= 0.9
     else:
-        SCALE_TEXT = 1
-    SCALE_TEXT = max(0.1, min(SCALE_TEXT, 20))
-    new_font_size = int(FONT_SIZE * SCALE_TEXT)
+        scale_text = 1
+    scale_text = max(0.1, min(scale_text, 20))
+    new_font_size = int(FONT_SIZE * scale_text)
     new_font_size = max(1, min(new_font_size, 200))
-    log.info("Text scale: %s New font size: %s", SCALE_TEXT, new_font_size)
+    log.info("Text scale: %s New font size: %s", scale_text, new_font_size)
 
     ERROR_OVERLAY.config(font=("Consolas", new_font_size))
     TOAST.config(font=("Consolas", new_font_size * 2))
@@ -1333,8 +1330,8 @@ root_w, root_h = int(root.winfo_screenwidth() * 0.75), int(
 geometry = f"{root_w}x{root_h}+{int(root_w * 0.125)}+{int(root_h * 0.125)}"
 root.geometry(geometry)
 
-SLIDESHOW_ON = False
-SLIDESHOW_PAUSE = 4000
+b_slideshow: bool = False
+slideshow_pause: int = 4000
 TOAST = tkinter.Label(
     root,
     text="status",
@@ -1426,7 +1423,7 @@ menu = tkinter.Menu(root, tearoff=0)
 
 def main(args):
     """Main function."""
-    global FIT, QUALITY, REFRESH_INTERVAL, SLIDESHOW_PAUSE, SORT, TRANSPOSE_INDEX, VERBOSITY
+    global QUALITY, REFRESH_INTERVAL, slideshow_pause, TRANSPOSE_INDEX, VERBOSITY
 
     if args.verbose:
         VERBOSITY = VERBOSITY_LEVELS[min(len(VERBOSITY_LEVELS) - 1, 1 + args.verbose)]
@@ -1436,7 +1433,7 @@ def main(args):
 
     set_supported_files()
 
-    FIT = args.resize or 0
+    root.fit = args.resize or 0
     QUALITY = [
         Image.Resampling.NEAREST,
         Image.Resampling.BOX,
@@ -1456,15 +1453,14 @@ def main(args):
     if args.geometry:
         root.geometry(args.geometry)
 
-    if args.order:
-        SORT = args.order
+    root.sort = args.order if args.order else "natural"
 
     if args.update:
         REFRESH_INTERVAL = args.update
         root.after(1000, refresh_loop)
 
     if args.slideshow:
-        SLIDESHOW_PAUSE = args.slideshow
+        slideshow_pause = args.slideshow
         slideshow_toggle()
 
     for b in binds:
