@@ -42,16 +42,17 @@ Binds:
 ```pre
 C - Set background color.
 F F11 Return - Toggle fullscreen.
-Q Escape - Close fullscreen or app.
+Escape - Close fullscreen or app.
 H F1 - Toggle help.
 I - Toggle info overlay.
 A - Toggle animation.
 Comma period - Browse animation frames.
-Ctrl-Left Ctrl-Right Ctrl-Up Ctrl-Down - Scroll.
-Ctrl-MouseWheel minus plus equal 0 - Zoom.
+Ctrl+Left Ctrl+Right Ctrl+Up Ctrl+Down - Scroll.
+Ctrl+MouseWheel minus plus equal 0 - Zoom.
+Q Shift+Q - Set resize quality.
 R - Resize type to fit window.
-T Shift-T - Transpose image.
-Alt-MouseWheel Alt-Minus Alt-Plus Alt-Equal - Zoom text.
+T Shift+T - Transpose image.
+Alt+MouseWheel Alt+minus Alt+plus Alt+equal - Zoom text.
 B Pause - Toggle slideshow.
 X Left Right Up Down BackSpace space MouseWheel Button-4 Button-5 Home End Key-1 - Browse.
 O - Set order.
@@ -59,9 +60,9 @@ D Delete - Delete file. Bypasses Trash.
 P - Pick a file to open.
 S - Save file as.
 U F5 - Update path info.
-Shift-U - Toggle autoupdate.
-Ctrl-C Ctrl-Insert - Copy info to clipboard.
-Ctrl-V Shift-Insert - Paste image from clipboard.
+Shift+U - Toggle autoupdate.
+Ctrl+c Ctrl+Insert - Copy info to clipboard.
+Ctrl+v Shift+Insert - Paste image from clipboard.
 V - Set verbosity.
 B1-Motion - Select area.
 B2-Motion - Drag image.

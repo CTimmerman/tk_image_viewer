@@ -39,24 +39,20 @@ class Fits(enum.IntEnum):
     SMALL = 3
 
 
-ANIMATION_ON: bool = True
 BG_COLORS = ["black", "gray10", "gray50", "white"]
-BG_INDEX = -1
 FONT_SIZE = 14
-IMAGE: Image.Image | None = None
-IM_FRAME = 0
-INFO: dict = {}
-b_lines: bool = False
-OLD_INDEX = -1
-QUALITY = Image.Resampling.NEAREST  # 0
-REFRESH_INTERVAL = -4000
-scale: float = 1.0
+RESIZE_QUALITY = [
+    Image.Resampling.NEAREST,
+    Image.Resampling.BOX,
+    Image.Resampling.BILINEAR,
+    Image.Resampling.HAMMING,
+    Image.Resampling.BICUBIC,
+    Image.Resampling.LANCZOS,
+]
 SCALE_MIN = 0.001
 SCALE_MAX = 40.0
-scale_text: float = 1.0
 SORTS = "natural string ctime mtime size".split()
 TITLE = __doc__.split("\n", 1)[0]
-TRANSPOSE_INDEX = -1
 VERBOSITY_LEVELS = [
     logging.CRITICAL,
     logging.ERROR,
@@ -64,11 +60,6 @@ VERBOSITY_LEVELS = [
     logging.INFO,
     logging.DEBUG,
 ]
-VERBOSITY = logging.WARNING
-WINDOW_SIZE = ""
-ZIP_INDEX = 0
-paths: list[str] = []
-path_index: int = 0
 
 # Add a handler to stream to sys.stderr warnings from all modules.
 logging.basicConfig(format="%(levelname)s: %(message)s")
@@ -91,16 +82,15 @@ def log_this(func):
 
 def animation_toggle(event=None):
     """Toggle animation."""
-    global ANIMATION_ON
-    ANIMATION_ON = not ANIMATION_ON
-    if ANIMATION_ON:
+    root.b_animate = not root.b_animate
+    if root.b_animate:
         toast("Starting animation.")
-        im_resize(ANIMATION_ON)
+        im_resize(root.b_animate)
     else:
         s = (
             "Stopping animation."
-            + f" Frame {1 + (1 + IM_FRAME) % IMAGE.n_frames}/{IMAGE.n_frames}"
-            if hasattr(IMAGE, "n_frames")
+            + f" Frame {1 + (1 + root.im_frame) % root.im.n_frames}/{root.im.n_frames}"
+            if hasattr(root.im, "n_frames")
             else ""
         )
         log.info(s)
@@ -110,20 +100,18 @@ def animation_toggle(event=None):
 @log_this
 def browse(event=None):
     """Browse."""
-    global path_index, ZIP_INDEX
+    new_index = root.i_path
 
-    new_index = path_index
-
-    if "Names" in INFO:
-        new_index = ZIP_INDEX
+    if "Names" in root.info:
+        new_index = root.i_zip
 
     k = event.keysym if event else "Next"
     if k in ("1", "Home"):
         new_index = 0
     elif k == "End":
-        new_index = path_index - 1
+        new_index = root.i_path - 1
     elif k == "x":
-        new_index = random.randint(0, len(paths) - 1)
+        new_index = random.randint(0, len(root.paths) - 1)
     elif (
         k in ("Left", "Up", "Button-4", "BackSpace")
         or event
@@ -133,47 +121,45 @@ def browse(event=None):
     else:
         new_index += 1
 
-    if "Names" in INFO:
+    if "Names" in root.info:
         if new_index < 0:
-            new_index = path_index - 1
-        elif new_index >= len(INFO["Names"]):
-            new_index = path_index + 1
+            new_index = root.i_path - 1
+        elif new_index >= len(root.info["Names"]):
+            new_index = root.i_path + 1
         else:
-            ZIP_INDEX = new_index
+            root.i_zip = new_index
             im_load()
             return
 
     if new_index < 0:
-        new_index = len(paths) - 1
-    if new_index >= len(paths):
+        new_index = len(root.paths) - 1
+    if new_index >= len(root.paths):
         new_index = 0
 
-    path_index = new_index
-    ZIP_INDEX = 0
+    root.i_path = new_index
+    root.i_zip = 0
     im_load()
 
 
 def browse_frame(event=None):
     """Browse animation frames."""
-    if not hasattr(IMAGE, "n_frames"):
+    if not hasattr(root.im, "n_frames"):
         toast("No frames.")
         return
-    global IM_FRAME
-
-    n = IMAGE.n_frames - 1
+    n = root.im.n_frames - 1
     k = event.keysym
     if k == "comma":
-        IM_FRAME -= 1
-        if IM_FRAME < 0:
-            IM_FRAME = n
+        root.im_frame -= 1
+        if root.im_frame < 0:
+            root.im_frame = n
     else:
-        IM_FRAME += 1
-        if IM_FRAME > n:
-            IM_FRAME = 0
+        root.im_frame += 1
+        if root.im_frame > n:
+            root.im_frame = 0
 
-    IMAGE.seek(IM_FRAME)
+    root.im.seek(root.im_frame)
     im_resize()
-    toast(f"Frame {1 + IM_FRAME}/{1 + n}", 1000)
+    toast(f"Frame {1 + root.im_frame}/{1 + n}", 1000)
 
 
 def clipboard_copy(event=None):
@@ -184,7 +170,6 @@ def clipboard_copy(event=None):
 
 def clipboard_paste(event=None):
     """Paste image from clipboard."""
-    global IMAGE, INFO, path_index, paths
     im = ImageGrab.grabclipboard()
     log.debug("Pasted %r", im)
     if not im:
@@ -195,16 +180,16 @@ def clipboard_paste(event=None):
     if isinstance(im, str):
         im = [line.strip('"') for line in im.split("\n")]
     if isinstance(im, list):
-        paths = [pathlib.Path(s) for s in im]
-        log.debug("Set paths to %s", paths)
-        path_index = 0
+        root.paths = [pathlib.Path(s) for s in im]
+        log.debug("Set paths to %s", root.paths)
+        root.i_path = 0
         im_load()
         return
-    IMAGE = im
-    INFO = {"Pasted": time.ctime()}
-    path_index = 0
-    paths = ["pasted"]
-    im_resize(IMAGE)
+    root.im = im
+    root.info = {"Pasted": time.ctime()}
+    root.i_path = 0
+    root.paths = ["pasted"]
+    im_resize(root.im)
 
 
 @log_this
@@ -223,7 +208,7 @@ def debug_keys(event=None):
 
 def delete_file(event=None):
     """Delete file. Bypasses Trash."""
-    path = paths[path_index]
+    path = root.paths[root.i_path]
     msg = f"Delete? {path}"
     log.warning(msg)
     answer = messagebox.showwarning(
@@ -300,15 +285,14 @@ def select(event):
 @log_this
 def drop_handler(event):
     """Handles dropped files."""
-    global paths, path_index
     log.debug("Dropped %r", event.data)
-    paths = [
+    root.paths = [
         pathlib.Path(line.strip('"'))
         for line in re.findall("{(.+?)}" if "{" in event.data else "[^ ]+", event.data)
     ]  # Windows 11.
-    if isinstance(paths, list):
-        log.debug("Set paths to %s", paths)
-        path_index = 0
+    if isinstance(root.paths, list):
+        log.debug("Set paths to %s", root.paths)
+        root.i_path = 0
         im_load()
 
 
@@ -335,7 +319,13 @@ def help_toggle(event=None):
                 re.sub(
                     "((^|-)[a-z])",
                     lambda m: m.group(1).upper(),
-                    re.sub("([TU])\\b", "Shift-\\1", keys.replace("Control", "Ctrl")),
+                    re.sub(
+                        "([QTU])\\b",
+                        "Shift+\\1",
+                        keys.replace("Control-", "Ctrl+")
+                        .replace("Alt-", "Alt+")
+                        .replace("Shift-", "Shift+"),
+                    ),
                     0,
                     re.MULTILINE,
                 )
@@ -366,13 +356,12 @@ def info_bg_update():
 
 def lines_toggle(event=None, on=None, off=None):
     """Toggle line overlay."""
-    global b_lines
-    b_lines = True if on else False if off else not b_lines  # NOSONAR
-    if not b_lines and canvas.lines:
+    root.b_lines = True if on else False if off else not root.b_lines  # NOSONAR
+    if not root.b_lines and canvas.lines:
         for line in canvas.lines:
             canvas.delete(line)
         canvas.lines = []
-    if b_lines and not canvas.lines:
+    if root.b_lines and not canvas.lines:
         w = root.winfo_width() - 1
         h = root.winfo_height() - 1
         canvas.lines.append(canvas.create_line(0, 0, w, 0, 0, h, w, h, fill="#f00"))  # type: ignore
@@ -381,12 +370,11 @@ def lines_toggle(event=None, on=None, off=None):
 
 def load_mhtml(path):
     """Load EML/MHT/MHTML."""
-    global IMAGE
     with open(path, "r", encoding="utf8") as f:
         mhtml = f.read()
     boundary = re.search('boundary="(.+)"', mhtml).group(1)
     parts = mhtml.split(boundary)[1:-1]
-    INFO["Names"] = []
+    root.info["Names"] = []
     new_parts = []
     for p in parts:
         meta, data = p.split("\n\n", maxsplit=1)
@@ -396,12 +384,12 @@ def load_mhtml(path):
         if "\ncontent-type:" in m and "\ncontent-type: image" not in m:
             continue
         name = sorted(meta.strip().split("\n"))[0].split("/")[-1]
-        INFO["Names"].append(name)
+        root.info["Names"].append(name)
         new_parts.append(data)
-    data = new_parts[ZIP_INDEX]
+    data = new_parts[root.i_zip]
     try:
         im_file = BytesIO(base64.standard_b64decode(data.rstrip()))
-        IMAGE = Image.open(im_file)
+        root.im = Image.open(im_file)
     except ValueError as ex:
         log.error("Failed to split mhtml: %s", ex)
         log.error("DATA %r", data[:180])
@@ -411,7 +399,6 @@ def load_mhtml(path):
 
 def load_svg(fpath):
     """Load an SVG file."""
-    global IMAGE
     if fpath.suffix == ".svgz":  # NOSONAR
         with gzip.open(fpath, "rt", encoding="utf8") as f:
             data = f.read()
@@ -452,30 +439,27 @@ def load_svg(fpath):
     surface = pygame.image.load(BytesIO(data.encode()))
     bf = BytesIO()
     pygame.image.save(surface, bf, "png")
-    IMAGE = Image.open(bf)
+    root.im = Image.open(bf)
 
 
 def load_zip(path):
     """Load a zip file."""
-    global IMAGE
     with zipfile.ZipFile(path, "r") as zf:
         names = zf.namelist()
-        INFO["Names"] = names
-        log.debug("Loading name index %s", ZIP_INDEX)
+        root.info["Names"] = names
+        log.debug("Loading name index %s", root.i_zip)
         # pylint: disable=consider-using-with
-        IMAGE = Image.open(zf.open(names[ZIP_INDEX]))
+        root.im = Image.open(zf.open(names[root.i_zip]))
 
 
 def im_load(path=None):
     """Load image."""
-    global IMAGE, IM_FRAME
-
-    if not path and paths:
-        path = paths[path_index]
+    if not path and root.paths:
+        path = root.paths[root.i_path]
     else:
         return
 
-    msg = f"{path_index+1}/{len(paths)}"
+    msg = f"{root.i_path+1}/{len(root.paths)}"
     log.debug("Loading %s %s", msg, path)
 
     err_msg = ""
@@ -489,19 +473,19 @@ def im_load(path=None):
             elif path.suffix in (".eml", ".mht", ".mhtml"):
                 load_mhtml(path)
             else:
-                IMAGE = Image.open(path)
-        log.debug("Cached %s PIL_IMAGE", IMAGE.size)
-        IM_FRAME = 0
-        if hasattr(IMAGE, "n_frames"):
-            INFO["Frames"] = IMAGE.n_frames
-        INFO.update(**IMAGE.info)
-        for k, v in INFO.items():
+                root.im = Image.open(path)
+        log.debug("Cached %s PIL_IMAGE", root.im.size)
+        root.im_frame = 0
+        if hasattr(root.im, "n_frames"):
+            root.info["Frames"] = root.im.n_frames
+        root.info.update(**root.im.info)
+        for k, v in root.info.items():
             log.debug(
                 "%s: %s",
                 k,
                 str(v)[:80] + "..." if len(str(v)) > 80 else v,
             )
-        im_resize(ANIMATION_ON)
+        im_resize(root.b_animate)
     # pylint: disable=W0718
     except (
         tkinter.TclError,
@@ -515,7 +499,7 @@ def im_load(path=None):
         BaseException,  # NOSONAR  # https://github.com/PyO3/pyo3/issues/3519
     ) as ex:
         err_msg = f"im_load {type(ex).__name__}: {ex}"
-        IMAGE = None
+        root.im = None
         msg = f"{msg} {err_msg} {path}"
         error_show(msg)
         raise
@@ -540,67 +524,63 @@ def im_fit(im):
     w, h = im.size
     ratio = get_fit_ratio(w, h)
     if ratio != 1.0:  # NOSONAR
-        im = im.resize((int(w * ratio), int(h * ratio)), QUALITY)
+        im = im.resize((int(w * ratio), int(h * ratio)), root.quality)
     return im
 
 
 def im_scale(im):
     """Scale image."""
-    global scale
-    log.debug("Scaling to %s", scale)
     im_w, im_h = im.size
-    ratio = scale * get_fit_ratio(im_w, im_h)
+    ratio = root.im_scale * get_fit_ratio(im_w, im_h)
     try:
         new_w = int(ratio * im_w)
         new_h = int(ratio * im_h)
         if new_w < 1 or new_h < 1:
             log.error("Too small. Scaling up.")
-            scale = max(SCALE_MIN, min(scale * 1.1, SCALE_MAX))
+            root.im_scale = max(SCALE_MIN, min(root.im_scale * 1.1, SCALE_MAX))
             im = im_scale(im)
         else:
-            im = IMAGE.resize((new_w, new_h), QUALITY)
+            im = root.im.resize((new_w, new_h), root.quality)
     except MemoryError as ex:
         log.error("Out of memory. Scaling down. %s", ex)
-        scale = max(SCALE_MIN, min(scale * 0.9, SCALE_MAX))
+        root.im_scale = max(SCALE_MIN, min(root.im_scale * 0.9, SCALE_MAX))
 
     return im
 
 
 def im_resize(loop=False):
     """Resize image."""
-    global IM_FRAME
-    if not IMAGE:
+    if not root.im:
         return
 
-    im = IMAGE.copy()
+    im = root.im.copy()
 
     if root.fit:
-        im = im_fit(IMAGE)
+        im = im_fit(root.im)
 
-    if scale != 1:
-        im = im_scale(IMAGE)
+    if root.im_scale != 1:
+        im = im_scale(root.im)
 
-    if TRANSPOSE_INDEX != -1:
-        log.debug("Transposing %s", Transpose(TRANSPOSE_INDEX))
-        im = im.transpose(TRANSPOSE_INDEX)
+    if root.transpose_type != -1:
+        log.debug("Transposing %s", Transpose(root.transpose_type))
+        im = im.transpose(root.transpose_type)
 
     im_show(im)
 
-    if loop and hasattr(IMAGE, "n_frames") and IMAGE.n_frames > 1:
-        IM_FRAME = (IM_FRAME + 1) % IMAGE.n_frames
+    if loop and hasattr(root.im, "n_frames") and root.im.n_frames > 1:
+        root.im_frame = (root.im_frame + 1) % root.im.n_frames
         try:
-            IMAGE.seek(IM_FRAME)
+            root.im.seek(root.im_frame)
         except EOFError as ex:
             log.error("IMAGE EOF. %s", ex)
-        duration = (INFO["duration"] or 100) if "duration" in INFO else 100
+        duration = (root.info["duration"] or 100) if "duration" in root.info else 100
         if hasattr(root, "animation"):
             root.after_cancel(root.animation)
-        root.animation = root.after(duration, im_resize, ANIMATION_ON)
+        root.animation = root.after(duration, im_resize, root.b_animate)
 
 
 def im_show(im):
     """Show PIL image in Tk image widget."""
-    global scale
     try:
         canvas.tkim: ImageTk.PhotoImage = ImageTk.PhotoImage(im)  # type: ignore
         canvas.itemconfig(canvas.image_ref, image=canvas.tkim, anchor="center")
@@ -621,23 +601,23 @@ def im_show(im):
         ERROR_OVERLAY.lower()
     except MemoryError as ex:
         log.error("Out of memory. Scaling down. %s", ex)
-        scale = max(SCALE_MIN, min(scale * 0.9, SCALE_MAX))
+        root.im_scale = max(SCALE_MIN, min(root.im_scale * 0.9, SCALE_MAX))
         return
 
     zip_info = (
-        f" {ZIP_INDEX + 1}/{len(INFO['Names'])} {INFO['Names'][ZIP_INDEX]}"
-        if "Names" in INFO
+        f" {root.i_zip + 1}/{len(root.info['Names'])} {root.info['Names'][root.i_zip]}"
+        if "Names" in root.info
         else ""
     )
     msg = (
-        f"{path_index+1}/{len(paths)}{zip_info} {'%sx%s' % IMAGE.size}"
-        f" @ {'%sx%s' % im.size} {paths[path_index]}"
+        f"{root.i_path+1}/{len(root.paths)}{zip_info} {'%sx%s' % root.im.size}"
+        f" @ {'%sx%s' % im.size} {root.paths[root.i_path]}"
     )
     root.title(msg + " - " + TITLE)
     if root.show_info and (
-        not hasattr(root, "last_index") or root.last_index != path_index
+        not hasattr(root, "last_index") or root.last_index != root.i_path
     ):
-        root.last_index = path_index
+        root.last_index = root.i_path
         info_set(msg + info_get())
     scrollbars_set()
 
@@ -668,7 +648,7 @@ def info_decode(b: bytes, encoding: str) -> str:
 def info_get() -> str:
     """Get image info."""
     msg = ""
-    for k, v in INFO.items():
+    for k, v in root.info.items():
         if k in ("exif", "icc_profile", "photoshop", "XML:com.adobe.xmp"):
             continue
 
@@ -685,12 +665,12 @@ def info_get() -> str:
         else:
             msg += f"\n{k}: {v}"
             # msg += f"\n{k}: {(str(v)[:80] + '...') if len(str(v)) > 80 else v}"
-    if not IMAGE:
+    if not root.im:
         return msg
 
-    msg += f"\nFormat: {IMAGE.format}"
+    msg += f"\nFormat: {root.im.format}"
     try:
-        msg += f"\nMIME type: {IMAGE.get_format_mimetype()}"  # type: ignore
+        msg += f"\nMIME type: {root.im.get_format_mimetype()}"  # type: ignore
     except AttributeError:
         pass
 
@@ -705,15 +685,15 @@ def info_get() -> str:
 def info_exif() -> str:
     """Return Exchangeable Image File (EXIF) info."""
     # Workaround from https://github.com/python-pillow/Pillow/issues/5863
-    if not hasattr(IMAGE, "_getexif"):
+    if not hasattr(root.im, "_getexif"):
         return ""
 
-    exif = IMAGE._getexif()  # type: ignore  # pylint: disable=protected-access
+    exif = root.im._getexif()  # type: ignore  # pylint: disable=protected-access
     if not exif:
         return ""
     log.debug("Got exif dict: %s", exif)
-    log.debug("im.exif bytes: %s", INFO["exif"].replace(b"\0", b""))
-    encoding = "utf_16_be" if b"MM" in INFO["exif"][:8] else "utf_16_le"
+    log.debug("im.exif bytes: %s", root.info["exif"].replace(b"\0", b""))
+    encoding = "utf_16_be" if b"MM" in root.info["exif"][:8] else "utf_16_le"
     log.debug("Encoding: %s", encoding)
     s = f"EXIF: {encoding}"
     for key, val in exif.items():
@@ -761,7 +741,7 @@ def info_exiftool() -> str:
         #         for k, v in d.items():
         #             s += f"\n{k}: {v}"
         output = subprocess.run(
-            ["exiftool", paths[path_index]],
+            ["exiftool", root.paths[root.i_path]],
             capture_output=True,
             check=False,
             text=False,
@@ -780,7 +760,7 @@ def info_exiftool() -> str:
 def info_icc() -> str:
     """Return the ICC color profile info."""
     s = ""
-    icc = IMAGE.info.get("icc_profile")  # type: ignore
+    icc = root.im.info.get("icc_profile")  # type: ignore
     if icc:
         p = ImageCms.ImageCmsProfile(BytesIO(icc))
         intent = ImageCms.getDefaultIntent(p)
@@ -801,7 +781,7 @@ isIntentSupported: {ImageCms.isIntentSupported(p, intent, 1)}"""
 def info_iptc() -> str:
     """Return IPTC metadata."""
     s = ""
-    iptc = IptcImagePlugin.getiptcinfo(IMAGE)
+    iptc = IptcImagePlugin.getiptcinfo(root.im)
     if iptc:
         s += "IPTC:"
         for k, v in iptc.items():
@@ -811,10 +791,10 @@ def info_iptc() -> str:
 
 def info_psd() -> str:
     """Return PhotoShop Document info."""
-    if "photoshop" not in INFO:
+    if "photoshop" not in root.info:
         return ""
     s = "Photoshop:\n"
-    for k, v in INFO["photoshop"].items():
+    for k, v in root.info["photoshop"].items():
         readable_v = re.sub(r"(\\x..){2,}", " ", str(v)).replace(r"\\0", "")
         # readable_v = re.sub(
         #     r"\\0", "", re.sub(r"(\\x..){2,}", " ", str(v))
@@ -844,8 +824,8 @@ def info_psd() -> str:
 def info_xmp() -> str:
     """Return XMP metadata."""
     s = ""
-    if hasattr(IMAGE, "getxmp"):
-        xmp = IMAGE.getxmp()  # type: ignore
+    if hasattr(root.im, "getxmp"):
+        xmp = root.im.getxmp()  # type: ignore
         if xmp:
             s += "XMP:\n"
             s += yaml.safe_dump(xmp)
@@ -906,12 +886,14 @@ def path_open(event=None):
 @log_this
 def path_save(event=None):
     """Save file as...."""
-    if "Names" in INFO:
-        p = pathlib.Path(str(paths[path_index]) + "." + INFO["Names"][ZIP_INDEX])
+    if "Names" in root.info:
+        p = pathlib.Path(
+            str(root.paths[root.i_path]) + "." + root.info["Names"][root.i_zip]
+        )
     else:
-        p = paths[path_index]
+        p = root.paths[root.i_path]
 
-    log.debug("Image info to be saved: %s", IMAGE.info)
+    log.debug("Image info to be saved: %s", root.im.info)
     filename = filedialog.asksaveasfilename(
         initialfile=p.absolute(),
         defaultextension=p.suffix,
@@ -920,14 +902,14 @@ def path_save(event=None):
     if filename:
         log.info("Saving %s", filename)
         try:
-            IMAGE.save(
+            root.im.save(
                 filename,
                 # dpi=INFO.get("dpi", b""),
                 # icc_profile=INFO.get("icc_profile", b""),
-                **IMAGE.info,
+                **root.im.info,
                 lossless=True,
                 optimize=True,
-                save_all=hasattr(IMAGE, "n_frames"),  # All frames.
+                save_all=hasattr(root.im, "n_frames"),  # All frames.
             )
             paths_update()
             toast(f"Saved {filename}")
@@ -940,34 +922,33 @@ def path_save(event=None):
 
 def paths_sort(path=None):
     """Sort paths."""
-    global path_index
     log.debug("Sorting %s", root.sort)
     if path:
         try:
-            path_index = paths.index(pathlib.Path(path))
+            root.i_path = root.paths.index(pathlib.Path(path))
         except ValueError:
             pass
-    elif paths:
-        path = paths[path_index]
+    elif root.paths:
+        path = root.paths[root.i_path]
     else:
         return
 
     for s in root.sort.split(","):
         if s == "natural":
-            paths.sort(key=natural_sort)
+            root.paths.sort(key=natural_sort)
         elif s == "ctime":
-            paths.sort(key=os.path.getmtime)
+            root.paths.sort(key=os.path.getmtime)
         elif s == "mtime":
-            paths.sort(key=os.path.getmtime)
+            root.paths.sort(key=os.path.getmtime)
         elif s == "random":
-            random.shuffle(paths)
+            random.shuffle(root.paths)
         elif s == "size":
-            paths.sort(key=os.path.getsize)
+            root.paths.sort(key=os.path.getsize)
         elif s == "string":
-            paths.sort()
+            root.paths.sort()
 
     try:
-        path_index = paths.index(pathlib.Path(path))
+        root.i_path = root.paths.index(pathlib.Path(path))
         im_load()
     except ValueError as ex:
         error_show("Not found: %s" % ex)
@@ -976,35 +957,33 @@ def paths_sort(path=None):
 @log_this
 def paths_update(event=None, path=None):
     """Update path info."""
-    global paths
     if not path:
-        path = paths[path_index]
+        path = root.paths[root.i_path]
 
     p = pathlib.Path(path)
     if not p.is_dir():
         p = p.parent
     log.debug("Reading %s...", p)
-    paths = list(p.glob("*"))
-    log.debug("Found %s files.", len(paths))
+    root.paths = list(p.glob("*"))
+    log.debug("Found %s files.", len(root.paths))
     log.debug("Filter?")
     paths_sort(path)
 
 
 def refresh_loop():
     """Autoupdate paths."""
-    if REFRESH_INTERVAL > 0:
+    if root.update_interval > 0:
         paths_update()
         if hasattr(root, "path_updater"):
             root.after_cancel(root.path_updater)
-        root.path_updater = root.after(REFRESH_INTERVAL, refresh_loop)
+        root.path_updater = root.after(root.update_interval, refresh_loop)
 
 
 def refresh_toggle(event=None):
     """Toggle autoupdate."""
-    global REFRESH_INTERVAL
-    REFRESH_INTERVAL = -REFRESH_INTERVAL
-    if REFRESH_INTERVAL > 0:
-        toast(f"Refreshing every {REFRESH_INTERVAL/1000:.2}s.")
+    root.update_interval = -root.update_interval
+    if root.update_interval > 0:
+        toast(f"Refreshing every {root.update_interval/1000:.2}s.")
         refresh_loop()
     else:
         toast("Refresh off.")
@@ -1012,10 +991,9 @@ def refresh_toggle(event=None):
 
 def resize_handler(event=None):
     """Handle Tk resize event."""
-    global WINDOW_SIZE
     new_size = root.winfo_geometry().split("+", maxsplit=1)[0]
     # Resize selection?
-    if WINDOW_SIZE != new_size:
+    if root.s_geo != new_size:
         ERROR_OVERLAY.config(wraplength=event.width)
         TOAST.config(wraplength=event.width)
         bb = canvas.bbox(canvas_info)
@@ -1025,11 +1003,11 @@ def resize_handler(event=None):
         if bb != canvas.bbox(canvas_info):
             info_bg_update()
 
-        if WINDOW_SIZE and root.fit:
+        if root.s_geo and root.fit:
             im_resize()
         else:
             scrollbars_set()
-        WINDOW_SIZE = new_size
+        root.s_geo = new_size
 
 
 def scroll(event):
@@ -1047,7 +1025,6 @@ def scroll(event):
 
 def scrollbars_set():
     """Hide/show scrollbars."""
-    global OLD_INDEX
     try:
         x, y, x2, y2 = canvas.bbox(canvas.image_ref, canvas_info)
         w = x2 - x
@@ -1071,26 +1048,25 @@ def scrollbars_set():
 
         scrollregion = (min(x, 0), min(y, 0), x + w, y + h)
         canvas.config(scrollregion=scrollregion)
-        if path_index != OLD_INDEX:
+        if root.i_path != root.i_scroll:
             canvas.xview_moveto(0)
             canvas.yview_moveto(0)
-            OLD_INDEX = path_index
+            root.i_scroll = root.i_path
     except TypeError as ex:
         log.error(ex)
 
 
 def set_bg(event=None):
     """Set background color."""
-    global BG_INDEX
-    BG_INDEX += 1
-    if BG_INDEX >= len(BG_COLORS):
-        BG_INDEX = 0
-    bg = BG_COLORS[BG_INDEX]
+    root.i_bg += 1
+    if root.i_bg >= len(BG_COLORS):
+        root.i_bg = 0
+    bg = BG_COLORS[root.i_bg]
     root.config(bg=bg)
     canvas.config(bg=bg)
     canvas.itemconfig(canvas.im_bg, fill=bg)
     ERROR_OVERLAY.config(bg=bg)
-    menu.config(bg=bg, fg="black" if BG_INDEX == len(BG_COLORS) - 1 else "white")
+    menu.config(bg=bg, fg="black" if root.i_bg == len(BG_COLORS) - 1 else "white")
 
 
 @log_this
@@ -1107,10 +1083,9 @@ def set_order(event=None):
 
 def set_stats(path):
     """Set stats."""
-    global INFO
     stats = os.stat(path)
     log.debug("Stat: %s", stats)
-    INFO = {
+    root.info = {
         # "Path": pathlib.Path(path),
         "Size": f"{stats.st_size:,} B",
         "Accessed": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stats.st_atime)),
@@ -1178,15 +1153,28 @@ def set_supported_files():
 
 
 @log_this
+def quality_set(event=None):
+    """Set resize quality."""
+    i = RESIZE_QUALITY.index(root.quality)
+    i += -1 if event and event.keysym == "Q" else 1
+    if i >= len(RESIZE_QUALITY):
+        i = 0
+    if i < 0:
+        i = len(RESIZE_QUALITY) - 1
+    root.quality = RESIZE_QUALITY[i]
+    toast(f"Quality: {Image.Resampling(root.quality).name}")
+    im_resize()
+
+
+@log_this
 def set_verbosity(event=None):
     """Set verbosity."""
-    global VERBOSITY
-    VERBOSITY -= 10
-    if VERBOSITY < 10:
-        VERBOSITY = logging.CRITICAL
+    root.verbosity -= 10
+    if root.verbosity < 10:
+        root.verbosity = logging.CRITICAL
 
-    logging.basicConfig(level=VERBOSITY)  # Show up in nested shells in Windows 11.
-    log.setLevel(VERBOSITY)
+    logging.basicConfig(level=root.verbosity)  # Show up in nested shells in Windows 11.
+    log.setLevel(root.verbosity)
     s = "Log level %s" % logging.getLevelName(log.getEffectiveLevel())
     toast(s)
     print(s)
@@ -1194,18 +1182,17 @@ def set_verbosity(event=None):
 
 def slideshow_run(event=None):
     """Run slideshow."""
-    if b_slideshow:
+    if root.b_slideshow:
         browse()
-        root.after(slideshow_pause, slideshow_run)
+        root.after(root.slideshow_pause, slideshow_run)
 
 
 def slideshow_toggle(event=None):
     """Toggle slideshow."""
-    global b_slideshow
-    b_slideshow = not b_slideshow
-    if b_slideshow:
+    root.b_slideshow = not root.b_slideshow
+    if root.b_slideshow:
         toast("Starting slideshow.")
-        root.after(slideshow_pause, slideshow_run)
+        root.after(root.slideshow_pause, slideshow_run)
     else:
         toast("Stopping slideshow.")
 
@@ -1222,15 +1209,14 @@ def toast(msg: str, ms: int = 2000, fg="#00FF00"):
 @log_this
 def transpose_set(event=None):
     """Transpose image."""
-    global TRANSPOSE_INDEX
-    TRANSPOSE_INDEX += -1 if event and event.keysym == "T" else 1
-    if TRANSPOSE_INDEX >= len(Transpose):
-        TRANSPOSE_INDEX = -1
-    if TRANSPOSE_INDEX < -1:
-        TRANSPOSE_INDEX = len(Transpose) - 1
+    root.transpose_type += -1 if event and event.keysym == "T" else 1
+    if root.transpose_type >= len(Transpose):
+        root.transpose_type = -1
+    if root.transpose_type < -1:
+        root.transpose_type = len(Transpose) - 1
 
-    if TRANSPOSE_INDEX >= 0:
-        toast(f"Transpose: {Transpose(TRANSPOSE_INDEX).name}")
+    if root.transpose_type >= 0:
+        toast(f"Transpose: {Transpose(root.transpose_type).name}")
     else:
         toast("Transpose: Normal")
     im_resize()
@@ -1277,41 +1263,39 @@ def str2float(s: str) -> float:
 
 def zoom(event):
     """Zoom."""
-    global scale
     k = event.keysym
     if event.num == 5 or event.delta > 0:
         k = "plus"
     if event.num == 4 or event.delta < 0:
         k = "minus"
     if k in ("plus", "equal"):
-        scale *= 1.1
+        root.im_scale *= 1.1
     elif k == "minus":
-        scale *= 0.9
+        root.im_scale *= 0.9
     else:
-        scale = 1
-    scale = max(SCALE_MIN, min(scale, SCALE_MAX))
+        root.im_scale = 1
+    root.im_scale = max(SCALE_MIN, min(root.im_scale, SCALE_MAX))
     im_resize()
 
 
 @log_this
 def zoom_text(event):
     """Zoom text."""
-    global scale_text
     k = event.keysym
     if event.num == 5 or event.delta > 0:
         k = "plus"
     if event.num == 4 or event.delta < 0:
         k = "minus"
     if k in ("plus", "equal"):
-        scale_text *= 1.1
+        root.f_text_scale *= 1.1
     elif k == "minus":
-        scale_text *= 0.9
+        root.f_text_scale *= 0.9
     else:
-        scale_text = 1
-    scale_text = max(0.1, min(scale_text, 20))
-    new_font_size = int(FONT_SIZE * scale_text)
+        root.f_text_scale = 1
+    root.f_text_scale = max(0.1, min(root.f_text_scale, 20))
+    new_font_size = int(FONT_SIZE * root.f_text_scale)
     new_font_size = max(1, min(new_font_size, 200))
-    log.info("Text scale: %s New font size: %s", scale_text, new_font_size)
+    log.info("Text scale: %s New font size: %s", root.f_text_scale, new_font_size)
 
     ERROR_OVERLAY.config(font=("Consolas", new_font_size))
     TOAST.config(font=("Consolas", new_font_size * 2))
@@ -1330,8 +1314,6 @@ root_w, root_h = int(root.winfo_screenwidth() * 0.75), int(
 geometry = f"{root_w}x{root_h}+{int(root_w * 0.125)}+{int(root_h * 0.125)}"
 root.geometry(geometry)
 
-b_slideshow: bool = False
-slideshow_pause: int = 4000
 TOAST = tkinter.Label(
     root,
     text="status",
@@ -1385,13 +1367,14 @@ ERROR_OVERLAY.place(x=0, y=0, relwidth=1, relheight=1)
 binds = [
     (set_bg, "c"),
     (fullscreen_toggle, "f F11 Return"),
-    (close, "q Escape"),
+    (close, "Escape"),
     (help_toggle, "h F1"),
     (info_toggle, "i"),
     (animation_toggle, "a"),
     (browse_frame, "comma period"),
     (scroll, "Control-Left Control-Right Control-Up Control-Down"),
     (zoom, "Control-MouseWheel minus plus equal 0"),
+    (quality_set, "q Q"),
     (fit_handler, "r"),
     (transpose_set, "t T"),
     (zoom_text, "Alt-MouseWheel Alt-minus Alt-plus Alt-equal"),
@@ -1423,26 +1406,33 @@ menu = tkinter.Menu(root, tearoff=0)
 
 def main(args):
     """Main function."""
-    global QUALITY, REFRESH_INTERVAL, slideshow_pause, TRANSPOSE_INDEX, VERBOSITY
-
+    root.b_animate = True
+    root.b_lines = False
+    root.b_slideshow = False
+    root.i_bg = -1
+    root.i_path = 0
+    root.i_scroll = -1
+    root.i_zip = 0
+    root.im_scale = 1.0
+    root.info = {}
+    root.f_text_scale = 1.0
+    root.s_geo = ""
+    root.transpose_type = -1
+    root.update_interval = -4000
     if args.verbose:
-        VERBOSITY = VERBOSITY_LEVELS[min(len(VERBOSITY_LEVELS) - 1, 1 + args.verbose)]
+        root.verbosity = VERBOSITY_LEVELS[
+            min(len(VERBOSITY_LEVELS) - 1, 1 + args.verbose)
+        ]
         set_verbosity()
 
     log.debug("Args: %s", args)
+    root.paths = []
 
     set_supported_files()
 
     root.fit = args.resize or 0
-    QUALITY = [
-        Image.Resampling.NEAREST,
-        Image.Resampling.BOX,
-        Image.Resampling.BILINEAR,
-        Image.Resampling.HAMMING,
-        Image.Resampling.BICUBIC,
-        Image.Resampling.LANCZOS,
-    ][args.quality]
-    TRANSPOSE_INDEX = args.transpose
+    root.quality = RESIZE_QUALITY[args.quality]
+    root.transpose_type = args.transpose
 
     # Needs visible window so wait for mainloop.
     root.after(50, paths_update, None, args.path)
@@ -1456,12 +1446,14 @@ def main(args):
     root.sort = args.order if args.order else "natural"
 
     if args.update:
-        REFRESH_INTERVAL = args.update
+        root.update_interval = args.update
         root.after(1000, refresh_loop)
 
     if args.slideshow:
-        slideshow_pause = args.slideshow
+        root.slideshow_pause = args.slideshow
         slideshow_toggle()
+    else:
+        root.slideshow_pause = 4000
 
     for b in binds:
         func = b[0]
