@@ -12,7 +12,7 @@ by Cees Timmerman
 """
 import base64, enum, functools, gzip, logging, os, pathlib, random, re, subprocess, time, tkinter, zipfile  # noqa: E401
 from io import BytesIO
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 
 # from exiftool import ExifToolHelper  # type: ignore  # Needs exiftool in path.
 import pillow_avif  # type: ignore  # noqa: F401  # pylint: disable=E0401
@@ -64,7 +64,7 @@ VERBOSITY_LEVELS = [
 # Add a handler to stream to sys.stderr warnings from all modules.
 logging.basicConfig(format="%(levelname)s: %(message)s")
 # Add a logging namespace.
-log = logging.getLogger(TITLE)
+LOG = logging.getLogger(TITLE)
 
 register_heif_opener()
 
@@ -74,7 +74,7 @@ def log_this(func):
 
     @functools.wraps(func)  # Keep signature.
     def inner(*args, **kwargs):
-        log.debug("Calling %s with %s, %s", func.__name__, args, kwargs)
+        LOG.debug("Calling %s with %s, %s", func.__name__, args, kwargs)
         return func(*args, **kwargs)
 
     return inner
@@ -87,39 +87,68 @@ def animation_toggle(event=None):
         toast("Starting animation.")
         im_resize(ROOT.b_animate)
     else:
-        s = (
-            "Stopping animation."
-            + f" Frame {1 + (1 + ROOT.im_frame) % ROOT.im.n_frames}/{ROOT.im.n_frames}"
+        s = "Stopping animation." + (
+            f" Frame {1 + (1 + ROOT.im_frame) % ROOT.im.n_frames}/{ROOT.im.n_frames}"
             if hasattr(ROOT.im, "n_frames")
             else ""
         )
-        log.info(s)
+        LOG.info(s)
         toast(s)
 
 
+def bind():
+    """Binds input events to functions."""
+    ROOT.bind_all("<Key>", debug_keys)
+    for b in BINDS:
+        func = b[0]
+        for event in b[1].split(" "):
+            ROOT.bind(f"<{event}>", func)
+
+
+def browse_end(event=None):
+    """Last."""
+    browse(pos=ROOT.i_path - 1)
+
+
+def browse_home(event=None):
+    """First."""
+    browse(pos=0)
+
+
+def browse_mouse(event):
+    """Previous/Next."""
+    browse(delta=-1 if event.delta > 0 else 1)
+
+
+def browse_percentage(event):
+    """Shift+1-9 to go to 10 to 90 percent of the list."""
+    if hasattr(event, "state") and event.state == 1 and event.keycode in range(49, 58):
+        ni = int(len(ROOT.paths) / 10 * (event.keycode - 48))
+        browse(pos=ni)
+
+
+def browse_next(event=None):
+    """Next."""
+    browse(delta=1)
+
+
+def browse_prev(event=None):
+    """Previous."""
+    browse(delta=-1)
+
+
+def browse_random(event=None):
+    """Go to random index."""
+    browse(pos=random.randint(0, len(ROOT.paths) - 1))
+
+
 @log_this
-def browse(event=None):
-    """Browse."""
-    new_index = ROOT.i_path
-
-    if "Names" in ROOT.info:
-        new_index = ROOT.i_zip
-
-    k = event.keysym if event else "Next"
-    if k in ("1", "Home"):
-        new_index = 0
-    elif k == "End":
-        new_index = ROOT.i_path - 1
-    elif k == "x":
-        new_index = random.randint(0, len(ROOT.paths) - 1)
-    elif (
-        k in ("Left", "Up", "Button-4", "BackSpace")
-        or event
-        and (event.num == 4 or event.delta > 0)
-    ):
-        new_index -= 1
+def browse(event=None, delta=0, pos=None):
+    """Browse list of paths."""
+    if pos is not None:
+        new_index = pos
     else:
-        new_index += 1
+        new_index = (ROOT.i_zip if "Names" in ROOT.info else ROOT.i_path) + delta
 
     if "Names" in ROOT.info:
         if new_index < 0:
@@ -164,24 +193,24 @@ def browse_frame(event=None):
 
 def clipboard_copy(event=None):
     """Copy info to clipboard."""
-    pyperclip.copy(CANVAS.itemcget(canvas_info, "text"))
+    pyperclip.copy(CANVAS.itemcget(CANVAS.text, "text"))
     toast("Copied info.")
 
 
 def clipboard_paste(event=None):
     """Paste image from clipboard."""
     im = ImageGrab.grabclipboard()
-    log.debug("Pasted %r", im)
+    LOG.debug("Pasted %r", im)
     if not im:
         im = ROOT.clipboard_get()
-        log.debug("Tk pasted %r", im)
+        LOG.debug("Tk pasted %r", im)
         if not im:
             return
     if isinstance(im, str):
         im = [line.strip('"') for line in im.split("\n")]
     if isinstance(im, list):
         ROOT.paths = [pathlib.Path(s) for s in im]
-        log.debug("Set paths to %s", ROOT.paths)
+        LOG.debug("Set paths to %s", ROOT.paths)
         ROOT.i_path = 0
         im_load()
         return
@@ -210,12 +239,12 @@ def delete_file(event=None):
     """Delete file. Bypasses Trash."""
     path = ROOT.paths[ROOT.i_path]
     msg = f"Delete? {path}"
-    log.warning(msg)
+    LOG.warning(msg)
     answer = messagebox.showwarning(
         "Delete File", f"Permanently delete {path}?", type=messagebox.YESNO
     )
     if answer == "yes":
-        log.warning("Deleting %s", path)
+        LOG.warning("Deleting %s", path)
         os.remove(path)
         paths_update()
 
@@ -287,13 +316,13 @@ def select(event):
 @log_this
 def drop_handler(event):
     """Handles dropped files."""
-    log.debug("Dropped %r", event.data)
+    LOG.debug("Dropped %r", event.data)
     ROOT.paths = [
         pathlib.Path(line.strip('"'))
         for line in re.findall("{(.+?)}" if "{" in event.data else "[^ ]+", event.data)
     ]  # Windows 11.
     if isinstance(ROOT.paths, list):
-        log.debug("Set paths to %s", ROOT.paths)
+        LOG.debug("Set paths to %s", ROOT.paths)
         ROOT.i_path = 0
         im_load()
 
@@ -301,7 +330,7 @@ def drop_handler(event):
 def error_show(msg: str):
     """Show error."""
     ROOT.title(msg + " - " + TITLE)
-    log.error(msg)
+    LOG.error(msg)
     ERROR_OVERLAY.config(text=msg)
     ERROR_OVERLAY.lift()
     info_set(msg)  # To copy.
@@ -310,12 +339,12 @@ def error_show(msg: str):
 
 def help_toggle(event=None):
     """Toggle help."""
-    if ROOT.show_info and CANVAS.itemcget(canvas_info, "text").startswith("C - Set"):
+    if ROOT.show_info and CANVAS.itemcget(CANVAS.text, "text").startswith("C - Set"):
         info_hide()
     else:
         lines = []
-        for fun, keys in binds:
-            if keys in ("ButtonPress", "ButtonRelease", "Configure"):
+        for fun, keys in BINDS:
+            if fun in (drag_begin, drag_end, resize_handler):
                 continue
             lines.append(
                 re.sub(
@@ -326,7 +355,9 @@ def help_toggle(event=None):
                         "Shift+\\1",
                         keys.replace("Control-", "Ctrl+")
                         .replace("Alt-", "Alt+")
-                        .replace("Shift-", "Shift+"),
+                        .replace("Shift-", "Shift+")
+                        .replace(" Prior ", " PageUp ")
+                        .replace(" Next ", " PageDown "),
                     ),
                     0,
                     re.MULTILINE,
@@ -337,22 +368,22 @@ def help_toggle(event=None):
         msg = "\n".join(lines)
         info_set(msg)
         info_show()
-        log.debug(msg)
+        LOG.debug(msg)
 
 
 def info_set(msg: str):
     """Change info text."""
-    CANVAS.itemconfig(canvas_info, text=msg)  # type: ignore
+    CANVAS.itemconfig(CANVAS.text, text=msg)  # type: ignore
     info_bg_update()
 
 
 def info_bg_update():
     """Update info overlay."""
-    x1, y1, x2, y2 = CANVAS.bbox(canvas_info)
-    CANVAS.overlay_tkim = ImageTk.PhotoImage(  # type: ignore
+    x1, y1, x2, y2 = CANVAS.bbox(CANVAS.text)
+    CANVAS.text_bg_tkim = ImageTk.PhotoImage(  # type: ignore
         Image.new("RGBA", (x2 - x1, y2 - y1), "#000a")
     )
-    CANVAS.itemconfig(CANVAS.overlay, image=CANVAS.overlay_tkim)  # type: ignore
+    CANVAS.itemconfig(CANVAS.text_bg, image=CANVAS.text_bg_tkim)  # type: ignore
     CANVAS.coords(CANVAS.im_bg, x1, y1, x2, y2)
 
 
@@ -388,16 +419,16 @@ def load_mhtml(path):
         name = sorted(meta.strip().split("\n"))[0].split("/")[-1]
         ROOT.info["Names"].append(name)
         new_parts.append(data)
-    log.debug("%s", f"Getting part {ROOT.i_zip}/{len(new_parts)} of {len(parts)}.")
+    LOG.debug("%s", f"Getting part {ROOT.i_zip}/{len(new_parts)} of {len(parts)}.")
     data = new_parts[ROOT.i_zip]
     try:
         im_file = BytesIO(base64.standard_b64decode(data.rstrip()))
         ROOT.im = Image.open(im_file)
     except ValueError as ex:
-        log.error("Failed to split mhtml: %s", ex)
-        log.error("DATA %r", data[:180])
+        LOG.error("Failed to split mhtml: %s", ex)
+        LOG.error("DATA %r", data[:180])
         im_file.seek(0)
-        log.error("DECODED %s", im_file.read()[:80])
+        LOG.error("DECODED %s", im_file.read()[:80])
 
 
 def load_svg(fpath):
@@ -450,7 +481,7 @@ def load_zip(path):
     with zipfile.ZipFile(path, "r") as zf:
         names = zf.namelist()
         ROOT.info["Names"] = names
-        log.debug("Loading name index %s", ROOT.i_zip)
+        LOG.debug("Loading name index %s", ROOT.i_zip)
         # pylint: disable=consider-using-with
         ROOT.im = Image.open(zf.open(names[ROOT.i_zip]))
 
@@ -463,7 +494,7 @@ def im_load(path=None):
         return
 
     msg = f"{ROOT.i_path+1}/{len(ROOT.paths)}"
-    log.debug("Loading %s %s", msg, path)
+    LOG.debug("Loading %s %s", msg, path)
 
     err_msg = ""
     try:
@@ -477,13 +508,13 @@ def im_load(path=None):
                 load_mhtml(path)
             else:
                 ROOT.im = Image.open(path)
-        log.debug("Cached %s PIL_IMAGE", ROOT.im.size)
+        LOG.debug("Cached %s PIL_IMAGE", ROOT.im.size)
         ROOT.im_frame = 0
         if hasattr(ROOT.im, "n_frames"):
             ROOT.info["Frames"] = ROOT.im.n_frames
         ROOT.info.update(**ROOT.im.info)
         for k, v in ROOT.info.items():
-            log.debug(
+            LOG.debug(
                 "%s: %s",
                 k,
                 str(v)[:80] + "..." if len(str(v)) > 80 else v,
@@ -539,13 +570,13 @@ def im_scale(im):
         new_w = int(ratio * im_w)
         new_h = int(ratio * im_h)
         if new_w < 1 or new_h < 1:
-            log.error("Too small. Scaling up.")
+            LOG.error("Too small. Scaling up.")
             ROOT.im_scale = max(SCALE_MIN, min(ROOT.im_scale * 1.1, SCALE_MAX))
             im = im_scale(im)
         else:
             im = ROOT.im.resize((new_w, new_h), ROOT.quality)
     except MemoryError as ex:
-        log.error("Out of memory. Scaling down. %s", ex)
+        LOG.error("Out of memory. Scaling down. %s", ex)
         ROOT.im_scale = max(SCALE_MIN, min(ROOT.im_scale * 0.9, SCALE_MAX))
 
     return im
@@ -565,7 +596,7 @@ def im_resize(loop=False):
         im = im_scale(ROOT.im)
 
     if ROOT.transpose_type != -1:
-        log.debug("Transposing %s", Transpose(ROOT.transpose_type))
+        LOG.debug("Transposing %s", Transpose(ROOT.transpose_type))
         im = im.transpose(ROOT.transpose_type)
 
     im_show(im)
@@ -575,7 +606,7 @@ def im_resize(loop=False):
         try:
             ROOT.im.seek(ROOT.im_frame)
         except EOFError as ex:
-            log.error("IMAGE EOF. %s", ex)
+            LOG.error("IMAGE EOF. %s", ex)
         duration = int(ROOT.info["duration"] or 100) if "duration" in ROOT.info else 100
         if hasattr(ROOT, "animation"):
             ROOT.after_cancel(ROOT.animation)
@@ -598,12 +629,12 @@ def im_show(im):
             # canvas.move(canvas.image_ref, -x + canvas.winfo_width() // 2, -y + canvas.winfo_height() // 2)
             CANVAS.move(CANVAS.image_ref, good_x - x, good_y - y)
         except TypeError as ex:
-            log.error(ex)
+            LOG.error(ex)
 
         # canvas.move(canvas.image_ref, 10, 0)
         ERROR_OVERLAY.lower()
     except MemoryError as ex:
-        log.error("Out of memory. Scaling down. %s", ex)
+        LOG.error("Out of memory. Scaling down. %s", ex)
         ROOT.im_scale = max(SCALE_MIN, min(ROOT.im_scale * 0.9, SCALE_MAX))
         return
 
@@ -645,7 +676,7 @@ def info_decode(b: bytes, encoding: str) -> str:
             "utf8",  # Leaves \0 of utf-16-be, which print() leaves out! XXX
         ):
             try:
-                log.debug("info_decode %s", enc)
+                LOG.debug("info_decode %s", enc)
                 return b.decode(enc)
             except UnicodeDecodeError:
                 pass
@@ -668,7 +699,7 @@ def info_get() -> str:
         # Image File Directories (IFD)
         elif k == "tag_v2":
             meta_dict = {TiffTags.TAGS_V2[k2]: v2 for k2, v2 in v}
-            log.debug("tag_v2: %s", meta_dict)
+            LOG.debug("tag_v2: %s", meta_dict)
             msg += "\ntag_v2: {meta_dict}\n"
         else:
             msg += f"\n{k}: {v}"
@@ -676,6 +707,7 @@ def info_get() -> str:
     if not ROOT.im:
         return msg
 
+    CANVAS.config(cursor="watch")  # Invisible on Windows 11?! XXX
     msg += f"\nFormat: {ROOT.im.format}"
     try:
         msg += f"\nMIME type: {ROOT.im.get_format_mimetype()}"  # type: ignore
@@ -687,6 +719,7 @@ def info_get() -> str:
         if s:
             msg += "\n\n" + s
 
+    CANVAS.config(cursor="")
     return msg
 
 
@@ -699,44 +732,44 @@ def info_exif() -> str:
     exif = ROOT.im._getexif()  # type: ignore  # pylint: disable=protected-access
     if not exif:
         return ""
-    log.debug("Got exif dict: %s", exif)
-    log.debug("im.exif bytes: %s", ROOT.info["exif"].replace(b"\0", b""))
+    LOG.debug("Got exif dict: %s", exif)
+    LOG.debug("im.exif bytes: %s", ROOT.info["exif"].replace(b"\0", b""))
     encoding = "utf_16_be" if b"MM" in ROOT.info["exif"][:8] else "utf_16_le"
-    log.debug("Encoding: %s", encoding)
+    LOG.debug("Encoding: %s", encoding)
     s = f"EXIF: {encoding}"
     for key, val in exif.items():
         print("EXIF TAG", key, ExifTags.TAGS.get(key, key))
         decoded_val = info_decode(val, encoding)
-        log.debug("decoded_val %s", decoded_val)
-        if key in ExifTags.TAGS:
-            key_name = ExifTags.TAGS[key]
-            s += f"\n{key_name}: "
-            if key_name == "ColorSpace":
-                s += "Uncalibrated" if val == 65535 else val
-            elif key_name == "ComponentsConfiguration":
-                s += "Y, Cb, Cr, -" if val == b"\x01\x02\x03\x00" else str(val)
-            elif key_name == "Orientation":
-                s += (
-                    "",
-                    "Normal",
-                    "FLIP_LEFT_RIGHT",
-                    "ROTATE_180",
-                    "FLIP_TOP_BOTTOM",
-                    "TRANSPOSE",
-                    "ROTATE_90",
-                    "TRANSVERSE",
-                    "ROTATE_270",
-                )[val]
-            elif key_name == "ResolutionUnit":
-                s += {2: "inch", 3: "cm"}.get(val, val)
-            elif key_name == "YCbCrPositioning":
-                s += {
-                    1: "Centered",
-                }.get(val, val)
-            else:
-                s += f"{decoded_val}"
-        else:
+        LOG.debug("decoded_val %s", decoded_val)
+        if key not in ExifTags.TAGS:
             s += f"\nUnknown EXIF tag {key}: {val}"
+            continue
+        key_name = ExifTags.TAGS[key]
+        s += f"\n{key_name}: "
+        if key_name == "ColorSpace":
+            s += "Uncalibrated" if val == 65535 else val
+        elif key_name == "ComponentsConfiguration":
+            s += "Y, Cb, Cr, -" if val == b"\x01\x02\x03\x00" else str(val)
+        elif key_name == "Orientation":
+            s += (
+                "",
+                "Normal",
+                "FLIP_LEFT_RIGHT",
+                "ROTATE_180",
+                "FLIP_TOP_BOTTOM",
+                "TRANSPOSE",
+                "ROTATE_90",
+                "TRANSVERSE",
+                "ROTATE_270",
+            )[val]
+        elif key_name == "ResolutionUnit":
+            s += {2: "inch", 3: "cm"}.get(val, val)
+        elif key_name == "YCbCrPositioning":
+            s += {
+                1: "Centered",
+            }.get(val, val)
+        else:
+            s += f"{decoded_val}"
 
     # Image File Directory (IFD)
     # exif = IMAGE.getexif()  # type: ignore
@@ -771,7 +804,7 @@ def info_exiftool() -> str:
         FileNotFoundError,  # Exiftool not on PATH.
         UnicodeDecodeError,  # PyExifTool can't handle Parameters data of naughty test\00032-1238577453.png which Exiftool itself handles fine.
     ) as ex:
-        log.debug("exiftool read fail: %s", ex)
+        LOG.debug("exiftool read fail: %s", ex)
     return s.strip()
 
 
@@ -858,9 +891,9 @@ def info_xmp() -> str:
 
 def info_toggle(event=None):
     """Toggle info overlay."""
-    if not ROOT.show_info or CANVAS.itemcget(canvas_info, "text").startswith("C - Set"):
+    if not ROOT.show_info or CANVAS.itemcget(CANVAS.text, "text").startswith("C - Set"):
         info_set(ROOT.title() + info_get())
-        log.debug("Showing info:\n%s", CANVAS.itemcget(canvas_info, "text"))
+        LOG.debug("Showing info:\n%s", CANVAS.itemcget(CANVAS.text, "text"))
         info_show()
     else:
         info_hide()
@@ -869,17 +902,17 @@ def info_toggle(event=None):
 def info_show():
     """Show info overlay."""
     ROOT.show_info = True
-    CANVAS.lift(CANVAS.overlay)
-    CANVAS.lift(canvas_info)
+    CANVAS.lift(CANVAS.text_bg)
+    CANVAS.lift(CANVAS.text)
     scrollbars_set()
 
 
 def info_hide():
     """Hide info overlay."""
     ROOT.show_info = False
-    CANVAS.lower(CANVAS.overlay)
-    CANVAS.lower(canvas_info)
-    info_set(CANVAS.itemcget(canvas_info, "text")[:7])
+    CANVAS.lower(CANVAS.text_bg)
+    CANVAS.lower(CANVAS.text)
+    info_set(CANVAS.itemcget(CANVAS.text, "text")[:7])
     scrollbars_set()
 
 
@@ -911,14 +944,14 @@ def path_save(event=None):
     else:
         p = ROOT.paths[ROOT.i_path]
 
-    log.debug("Image info to be saved: %s", ROOT.im.info)
+    LOG.debug("Image info to be saved: %s", ROOT.im.info)
     filename = filedialog.asksaveasfilename(
         initialfile=p.absolute(),
         defaultextension=p.suffix,
         filetypes=ROOT.SUPPORTED_FILES_WRITE,
     )
     if filename:
-        log.info("Saving %s", filename)
+        LOG.info("Saving %s", filename)
         try:
             ROOT.im.save(
                 filename,
@@ -933,14 +966,14 @@ def path_save(event=None):
             toast(f"Saved {filename}")
         except (IOError, KeyError, TypeError, ValueError) as ex:
             msg = f"Failed to save as {filename}. {ex}"
-            log.error(msg)
+            LOG.error(msg)
             toast(msg, 4000, "red")
             raise
 
 
 def paths_sort(path=None):
     """Sort paths."""
-    log.debug("Sorting %s", ROOT.sort)
+    LOG.debug("Sorting %s", ROOT.sort)
     if path:
         try:
             ROOT.i_path = ROOT.paths.index(pathlib.Path(path))
@@ -981,10 +1014,10 @@ def paths_update(event=None, path=None):
     p = pathlib.Path(path)
     if not p.is_dir():
         p = p.parent
-    log.debug("Reading %s...", p)
+    LOG.debug("Reading %s...", p)
     ROOT.paths = list(p.glob("*"))
-    log.debug("Found %s files.", len(ROOT.paths))
-    log.debug("Filter?")
+    LOG.debug("Found %s files.", len(ROOT.paths))
+    LOG.debug("Filter?")
     paths_sort(path)
 
 
@@ -1010,22 +1043,24 @@ def refresh_toggle(event=None):
 def resize_handler(event=None):
     """Handle Tk resize event."""
     new_size = ROOT.winfo_geometry().split("+", maxsplit=1)[0]
+    if ROOT.s_geo == new_size:
+        return
+    ERROR_OVERLAY.config(wraplength=event.width)
+    TOAST.config(wraplength=event.width)
+    CANVAS.itemconfig(CANVAS.text, width=event.width - 16)
+    CANVAS.coords(CANVAS.im_bg, 0, 0, event.width, event.height)
     # Resize selection?
-    if ROOT.s_geo != new_size:
-        ERROR_OVERLAY.config(wraplength=event.width)
-        TOAST.config(wraplength=event.width)
-        bb = CANVAS.bbox(canvas_info)
-        CANVAS.itemconfig(canvas_info, width=event.width - 16)
-        CANVAS.coords(CANVAS.im_bg, 0, 0, event.width, event.height)
 
-        if bb != CANVAS.bbox(canvas_info):
-            info_bg_update()
+    bb = CANVAS.bbox(CANVAS.text)
+    if bb != CANVAS.bbox(CANVAS.text):
+        info_bg_update()
 
-        if ROOT.s_geo and ROOT.fit:
-            im_resize()
-        else:
-            scrollbars_set()
-        ROOT.s_geo = new_size
+    if ROOT.fit:
+        im_resize()
+
+    scrollbars_set()
+
+    ROOT.s_geo = new_size
 
 
 def scroll(event):
@@ -1035,6 +1070,7 @@ def scroll(event):
         CANVAS.xview_scroll(-10, "units")
     elif k == "Right":
         CANVAS.xview_scroll(10, "units")
+        LOG.debug("After scrolling 10 px, xvieww returns: %s", CANVAS.xview())
     if k == "Up":
         CANVAS.yview_scroll(-10, "units")
     elif k == "Down":
@@ -1043,35 +1079,78 @@ def scroll(event):
 
 def scrollbars_set():
     """Hide/show scrollbars."""
+    win_h = ROOT.winfo_height()
+    win_w = ROOT.winfo_width()
     try:
-        x, y, x2, y2 = CANVAS.bbox(CANVAS.image_ref, canvas_info)
-        w = x2 - x
-        h = y2 - y
-        sv = max(0, y) + h > ROOT.winfo_height()
+        x, y, x2, y2 = CANVAS.bbox(CANVAS.image_ref, CANVAS.text)
+        can_w = x2 - x
+        can_h = y2 - y
+        show_v = max(0, y) + can_h > win_h
         # Vertical scrollbar causing horizontal scrollbar.
-        sh = max(0, x) + w > ROOT.winfo_width() - 16 * sv
+        show_h = max(0, x) + can_w > win_w - 16 * show_v
         # Horizontal scrollbar causing vertical scrollbar.
-        sv = max(0, y) + h > ROOT.winfo_height() - 16 * sh
-        if sh:
-            h += 16
-            scrollx.lift()
+        show_v = max(0, y) + can_h > win_h - 16 * show_h
+        if show_h:
+            can_h += 16
+            SCROLLX.place(
+                x=0,
+                y=1,
+                width=win_w,
+                relx=0,
+                rely=1,
+                anchor="sw",
+                bordermode="outside",
+            )
+            SCROLLX.lift()
         else:
-            scrollx.lower()
+            SCROLLX.lower()
 
-        if sv:
-            w += 16
-            scrolly.lift()
+        if show_v:
+            can_w += 16
+            SCROLLY.place(
+                x=1,
+                y=0,
+                height=win_h,
+                relx=1,
+                rely=0,
+                anchor="ne",
+                bordermode="outside",
+            )
+            SCROLLY.lift()
         else:
-            scrolly.lower()
+            SCROLLY.lower()
 
-        scrollregion = (min(x, 0), min(y, 0), x + w, y + h)
+        if show_h and show_v:
+            SCROLLX.place(
+                x=0,
+                y=1,
+                width=win_w - 16,
+                relx=0,
+                rely=1,
+                anchor="sw",
+                bordermode="outside",
+            )
+            SCROLLY.place(
+                x=1,
+                y=0,
+                height=win_h - 16,
+                relx=1,
+                rely=0,
+                anchor="ne",
+                bordermode="outside",
+            )
+            GRIP.lift()
+        else:
+            GRIP.lower()
+
+        scrollregion = (min(x, 0), min(y, 0), x + can_w, y + can_h)
         CANVAS.config(scrollregion=scrollregion)
         if ROOT.i_path != ROOT.i_scroll:
             CANVAS.xview_moveto(0)
             CANVAS.yview_moveto(0)
             ROOT.i_scroll = ROOT.i_path
     except TypeError as ex:
-        log.error(ex)
+        LOG.error(ex)
 
 
 def set_bg(event=None):
@@ -1085,6 +1164,7 @@ def set_bg(event=None):
     CANVAS.itemconfig(CANVAS.im_bg, fill=bg)
     ERROR_OVERLAY.config(bg=bg)
     MENU.config(bg=bg, fg="black" if ROOT.i_bg == len(BG_COLORS) - 1 else "white")
+    ttk.Style().configure("TSizegrip", background=bg)
 
 
 @log_this
@@ -1094,7 +1174,7 @@ def set_order(event=None):
     i = (i + 1) % len(SORTS)
     ROOT.sort = SORTS[i]
     s = "Sort: " + ROOT.sort
-    log.info(s)
+    LOG.info(s)
     toast(s)
     paths_sort()
 
@@ -1102,7 +1182,7 @@ def set_order(event=None):
 def set_stats(path):
     """Set stats."""
     stats = os.stat(path)
-    log.debug("Stat: %s", stats)
+    LOG.debug("Stat: %s", stats)
     ROOT.info = {
         # "Path": pathlib.Path(path),
         "Size": f"{stats.st_size:,} B",
@@ -1148,8 +1228,8 @@ def set_supported_files():
         *sorted((k, v) for k, v in type_exts.items() if k in Image.SAVE),
     ]
 
-    log.debug("Supports %s", ", ".join(s[1:].upper() for s in sorted(list(exts))))
-    log.debug(
+    LOG.debug("Supports %s", ", ".join(s[1:].upper() for s in sorted(list(exts))))
+    LOG.debug(
         "Open: %s",
         ", ".join(
             sorted(
@@ -1158,11 +1238,11 @@ def set_supported_files():
             )
         ),
     )
-    log.debug(
+    LOG.debug(
         "Save: %s",
         ", ".join(sorted(k[1:].upper() for k, v in exts.items() if v in Image.SAVE)),
     )
-    log.debug(
+    LOG.debug(
         "Save all frames: %s",
         ", ".join(
             sorted(k[1:].upper() for k, v in exts.items() if v in Image.SAVE_ALL)
@@ -1191,8 +1271,8 @@ def set_verbosity(event=None):
         ROOT.verbosity = logging.CRITICAL
 
     logging.basicConfig(level=ROOT.verbosity)  # Show up in nested shells in Windows 11.
-    log.setLevel(ROOT.verbosity)
-    s = "Log level %s" % logging.getLevelName(log.getEffectiveLevel())
+    LOG.setLevel(ROOT.verbosity)
+    s = "Log level %s" % logging.getLevelName(LOG.getEffectiveLevel())
     toast(s)
     print(s)
 
@@ -1253,7 +1333,7 @@ def fullscreen_toggle(event=None):
     if not ROOT.overrideredirect():
         ROOT.old_geometry = ROOT.geometry()
         ROOT.old_state = ROOT.state()
-        log.debug("Old widow geometry: %s", ROOT.old_geometry)
+        LOG.debug("Old widow geometry: %s", ROOT.old_geometry)
         ROOT.overrideredirect(True)
         ROOT.state("zoomed")
     else:
@@ -1261,12 +1341,11 @@ def fullscreen_toggle(event=None):
         ROOT.state(ROOT.old_state)
         if ROOT.state() == "normal":
             new_geometry = (
-                # Happens when window wasn't visible yet.
                 "300x200+300+200"
-                if ROOT.old_geometry.startswith("1x1")
+                if ROOT.old_geometry.startswith("1x1")  # Window wasn't visible yet.
                 else ROOT.old_geometry
             )
-            log.debug("Restoring geometry: %s", new_geometry)
+            LOG.debug("Restoring geometry: %s", new_geometry)
             ROOT.geometry(new_geometry)
     # Keeps using display 1
     # root.attributes("-fullscreen", not root.attributes("-fullscreen"))
@@ -1312,11 +1391,11 @@ def zoom_text(event):
     ROOT.f_text_scale = max(0.1, min(ROOT.f_text_scale, 20))
     new_font_size = int(FONT_SIZE * ROOT.f_text_scale)
     new_font_size = max(1, min(new_font_size, 200))
-    log.info("Text scale: %s New font size: %s", ROOT.f_text_scale, new_font_size)
+    LOG.info("Text scale: %s New font size: %s", ROOT.f_text_scale, new_font_size)
 
     ERROR_OVERLAY.config(font=("Consolas", new_font_size))
     TOAST.config(font=("Consolas", new_font_size * 2))
-    CANVAS.itemconfig(canvas_info, font=("Consolas", new_font_size))
+    CANVAS.itemconfig(CANVAS.text, font=("Consolas", new_font_size))
     info_bg_update()
 
 
@@ -1349,8 +1428,8 @@ CANVAS.dragx = 0  # type: ignore
 CANVAS.dragy = 0  # type: ignore
 CANVAS.lines = []  # type: ignore
 CANVAS.place(x=0, y=0, relwidth=1, relheight=1)
-CANVAS.overlay = CANVAS.create_image(0, 0, anchor="nw")  # type: ignore
-canvas_info = CANVAS.create_text(
+CANVAS.text_bg = CANVAS.create_image(0, 0, anchor="nw")  # type: ignore
+CANVAS.text = CANVAS.create_text(  # type: ignore
     1,  # If 0, bbox starts at -1.
     0,
     anchor="nw",
@@ -1362,14 +1441,15 @@ canvas_info = CANVAS.create_text(
 CANVAS.im_bg = CANVAS.create_rectangle(0, 0, root_w, root_h, fill="black", width=0)  # type: ignore
 CANVAS.image_ref = CANVAS.create_image(root_w // 2, root_h // 2, anchor="center")  # type: ignore
 ROOT.update()
-scrollx = tkinter.Scrollbar(ROOT, orient="horizontal", command=CANVAS.xview)
-scrollx.place(x=0, y=1, relwidth=1, relx=1, rely=1, anchor="se")
-scrolly = tkinter.Scrollbar(ROOT, command=CANVAS.yview)
-scrolly.place(x=1, y=0, relheight=1, relx=1, rely=1, anchor="se")
+SCROLLX = tkinter.Scrollbar(ROOT, orient="horizontal", command=CANVAS.xview)
+SCROLLY = tkinter.Scrollbar(ROOT, command=CANVAS.yview)
+GRIP = ttk.Sizegrip(ROOT)
+GRIP.pack(side="bottom", anchor="se")
+
 CANVAS.config(
-    xscrollcommand=scrollx.set,
+    xscrollcommand=SCROLLX.set,
     xscrollincrement=1,
-    yscrollcommand=scrolly.set,
+    yscrollcommand=SCROLLY.set,
     yscrollincrement=1,
 )
 ERROR_OVERLAY = tkinter.Label(
@@ -1383,8 +1463,9 @@ ERROR_OVERLAY = tkinter.Label(
 )
 ERROR_OVERLAY.place(x=0, y=0, relwidth=1, relheight=1)
 
-# root.bind_all("<Key>", debug_keys)
-binds = [
+MENU = tkinter.Menu(ROOT, tearoff=0)
+
+BINDS = [
     (set_bg, "c"),
     (fullscreen_toggle, "f F11 Return"),
     (close, "Escape"),
@@ -1399,10 +1480,13 @@ binds = [
     (transpose_set, "t T"),
     (zoom_text, "Alt-MouseWheel Alt-minus Alt-plus Alt-equal"),
     (slideshow_toggle, "b Pause"),
-    (
-        browse,
-        "x Left Right Up Down BackSpace space MouseWheel Button-4 Button-5 Home End Key-1",
-    ),
+    (browse_mouse, "MouseWheel"),
+    (browse_next, "Right Down Next Button-5"),
+    (browse_prev, "Left Up Prior Button-4 BackSpace"),
+    (browse_end, "End"),
+    (browse_home, "Key-1 Home"),
+    (browse_percentage, "Key"),
+    (browse_random, "x"),
     (set_order, "o"),
     (delete_file, "d Delete"),
     (path_open, "p"),
@@ -1420,8 +1504,6 @@ binds = [
     (lines_toggle, "l"),
     (resize_handler, "Configure"),
 ]
-
-MENU = tkinter.Menu(ROOT, tearoff=0)
 
 
 def main(args):
@@ -1445,7 +1527,7 @@ def main(args):
         ]
         set_verbosity()
 
-    log.debug("Args: %s", args)
+    LOG.debug("Args: %s", args)
     ROOT.paths = []
 
     set_supported_files()
@@ -1455,7 +1537,8 @@ def main(args):
     ROOT.transpose_type = args.transpose
 
     # Needs visible window so wait for mainloop.
-    ROOT.after(50, paths_update, None, args.path)
+    ROOT.after(10, paths_update, None, args.path)
+    ROOT.after(20, resize_handler, type("", (), {"width": root_w, "height": root_h}))
 
     if args.fullscreen:
         ROOT.after(100, fullscreen_toggle)
@@ -1475,14 +1558,12 @@ def main(args):
     else:
         ROOT.slideshow_pause = 4000
 
-    for b in binds:
-        func = b[0]
-        for event in b[1].split(" "):
-            ROOT.bind(f"<{event}>", func)
-
-    for fun, keys in binds:
+    # Prepare context menu.
+    for fun, keys in BINDS:
         if fun in (
             browse_frame,
+            browse_percentage,
+            browse_mouse,
             drag,
             drag_begin,
             drag_end,
@@ -1500,6 +1581,7 @@ def main(args):
         else:
             MENU.add_command(label=fun.__doc__[:-1].title(), command=fun)
 
+    bind()
     set_bg()
     ROOT.mainloop()
 
