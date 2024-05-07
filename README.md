@@ -54,7 +54,13 @@ R - Resize type to fit window.
 T Shift+T - Transpose image.
 Alt+MouseWheel Alt+Minus Alt+Plus Alt+Equal - Zoom text.
 B Pause - Toggle slideshow.
-X Left Right Up Down BackSpace space MouseWheel Button-4 Button-5 Home End Key-1 - Browse.
+MouseWheel - Previous/Next.
+Right Down PageDown Button-5 - Next.
+Left Up PageUp Button-4 BackSpace - Previous.
+End - Last.
+Key-1 Home - First.
+Key - Shift+1-9 to go to 10 to 90 percent of the list.
+X - Go to random index.
 O - Set order.
 D Delete - Delete file. Bypasses Trash.
 P - Pick a file to open.
