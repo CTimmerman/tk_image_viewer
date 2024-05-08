@@ -82,14 +82,14 @@ def log_this(func):
 
 def animation_toggle(event=None):
     """Toggle animation."""
-    ROOT.b_animate = not ROOT.b_animate
-    if ROOT.b_animate:
+    APP.b_animate = not APP.b_animate
+    if APP.b_animate:
         toast("Starting animation.")
-        im_resize(ROOT.b_animate)
+        im_resize(APP.b_animate)
     else:
         s = "Stopping animation." + (
-            f" Frame {1 + (1 + ROOT.im_frame) % ROOT.im.n_frames}/{ROOT.im.n_frames}"
-            if hasattr(ROOT.im, "n_frames")
+            f" Frame {1 + (1 + APP.im_frame) % APP.im.n_frames}/{APP.im.n_frames}"
+            if hasattr(APP.im, "n_frames")
             else ""
         )
         LOG.info(s)
@@ -98,16 +98,16 @@ def animation_toggle(event=None):
 
 def bind():
     """Binds input events to functions."""
-    ROOT.bind_all("<Key>", debug_keys)
+    APP.bind_all("<Key>", debug_keys)
     for b in BINDS:
         func = b[0]
         for event in b[1].split(" "):
-            ROOT.bind(f"<{event}>", func)
+            APP.bind(f"<{event}>", func)
 
 
 def browse_end(event=None):
     """Last."""
-    browse(pos=ROOT.i_path - 1)
+    browse(pos=APP.i_path - 1)
 
 
 def browse_home(event=None):
@@ -123,7 +123,7 @@ def browse_mouse(event):
 def browse_percentage(event):
     """Shift+1-9 to go to 10 to 90 percent of the list."""
     if hasattr(event, "state") and event.state == 1 and event.keycode in range(49, 58):
-        ni = int(len(ROOT.paths) / 10 * (event.keycode - 48))
+        ni = int(len(APP.paths) / 10 * (event.keycode - 48))
         browse(pos=ni)
 
 
@@ -139,7 +139,7 @@ def browse_prev(event=None):
 
 def browse_random(event=None):
     """Go to random index."""
-    browse(pos=random.randint(0, len(ROOT.paths) - 1))
+    browse(pos=random.randint(0, len(APP.paths) - 1))
 
 
 @log_this
@@ -148,47 +148,47 @@ def browse(event=None, delta=0, pos=None):
     if pos is not None:
         new_index = pos
     else:
-        new_index = (ROOT.i_zip if "Names" in ROOT.info else ROOT.i_path) + delta
+        new_index = (APP.i_zip if "Names" in APP.info else APP.i_path) + delta
 
-    if "Names" in ROOT.info:
+    if "Names" in APP.info:
         if new_index < 0:
-            new_index = ROOT.i_path - 1
-        elif new_index >= len(ROOT.info["Names"]):
-            new_index = ROOT.i_path + 1
+            new_index = APP.i_path - 1
+        elif new_index >= len(APP.info["Names"]):
+            new_index = APP.i_path + 1
         else:
-            ROOT.i_zip = new_index
+            APP.i_zip = new_index
             im_load()
             return
 
     if new_index < 0:
-        new_index = len(ROOT.paths) - 1
-    if new_index >= len(ROOT.paths):
+        new_index = len(APP.paths) - 1
+    if new_index >= len(APP.paths):
         new_index = 0
 
-    ROOT.i_path = new_index
-    ROOT.i_zip = 0
+    APP.i_path = new_index
+    APP.i_zip = 0
     im_load()
 
 
 def browse_frame(event=None):
     """Browse animation frames."""
-    if not hasattr(ROOT.im, "n_frames"):
+    if not hasattr(APP.im, "n_frames"):
         toast("No frames.")
         return
-    n = ROOT.im.n_frames - 1
+    n = APP.im.n_frames - 1
     k = event.keysym
     if k == "comma":
-        ROOT.im_frame -= 1
-        if ROOT.im_frame < 0:
-            ROOT.im_frame = n
+        APP.im_frame -= 1
+        if APP.im_frame < 0:
+            APP.im_frame = n
     else:
-        ROOT.im_frame += 1
-        if ROOT.im_frame > n:
-            ROOT.im_frame = 0
+        APP.im_frame += 1
+        if APP.im_frame > n:
+            APP.im_frame = 0
 
-    ROOT.im.seek(ROOT.im_frame)
+    APP.im.seek(APP.im_frame)
     im_resize()
-    toast(f"Frame {1 + ROOT.im_frame}/{1 + n}", 1000)
+    toast(f"Frame {1 + APP.im_frame}/{1 + n}", 1000)
 
 
 def clipboard_copy(event=None):
@@ -202,32 +202,32 @@ def clipboard_paste(event=None):
     im = ImageGrab.grabclipboard()
     LOG.debug("Pasted %r", im)
     if not im:
-        im = ROOT.clipboard_get()
+        im = APP.clipboard_get()
         LOG.debug("Tk pasted %r", im)
         if not im:
             return
     if isinstance(im, str):
         im = [line.strip('"') for line in im.split("\n")]
     if isinstance(im, list):
-        ROOT.paths = [pathlib.Path(s) for s in im]
-        LOG.debug("Set paths to %s", ROOT.paths)
-        ROOT.i_path = 0
+        APP.paths = [pathlib.Path(s) for s in im]
+        LOG.debug("Set paths to %s", APP.paths)
+        APP.i_path = 0
         im_load()
         return
-    ROOT.im = im
-    ROOT.info = {"Pasted": time.ctime()}
-    ROOT.i_path = 0
-    ROOT.paths = ["pasted"]
-    im_resize(ROOT.im)
+    APP.im = im
+    APP.info = {"Pasted": time.ctime()}
+    APP.i_path = 0
+    APP.paths = ["pasted"]
+    im_resize(APP.im)
 
 
 @log_this
 def close(event=None):
     """Close fullscreen or app."""
-    if ROOT.overrideredirect():
+    if APP.overrideredirect():
         fullscreen_toggle()
     else:
-        ROOT.quit()
+        APP.quit()
 
 
 @log_this
@@ -237,7 +237,7 @@ def debug_keys(event=None):
 
 def delete_file(event=None):
     """Delete file. Bypasses Trash."""
-    path = ROOT.paths[ROOT.i_path]
+    path = APP.paths[APP.i_path]
     msg = f"Delete? {path}"
     LOG.warning(msg)
     answer = messagebox.showwarning(
@@ -284,11 +284,11 @@ def drag(event):
     dx, dy = int(evx - CANVAS.dragx), int(evy - CANVAS.dragy)
     # Keep at least a corner in view.
     # Goes entirely out of view when switching to smaller imag!
-    # new_x = max(-w + 64, min(root.winfo_width() - 64, x + dx))
-    # new_y = max(-h + 64, min(root.winfo_height() - 64, y + dy))
+    # new_x = max(-w + 64, min(APP.winfo_width() - 64, x + dx))
+    # new_y = max(-h + 64, min(APP.winfo_height() - 64, y + dy))
 
-    new_x = max(0, min(ROOT.winfo_width() - w, x + dx))
-    new_y = max(0, min(ROOT.winfo_height() - h, y + dy))
+    new_x = max(0, min(APP.winfo_width() - w, x + dx))
+    new_y = max(0, min(APP.winfo_height() - h, y + dy))
     if new_x == 0:
         CANVAS.xview_scroll(-dx, "units")
     if new_y == 0:
@@ -317,29 +317,29 @@ def select(event):
 def drop_handler(event):
     """Handles dropped files."""
     LOG.debug("Dropped %r", event.data)
-    ROOT.paths = [
+    APP.paths = [
         pathlib.Path(line.strip('"'))
         for line in re.findall("{(.+?)}" if "{" in event.data else "[^ ]+", event.data)
     ]  # Windows 11.
-    if isinstance(ROOT.paths, list):
-        LOG.debug("Set paths to %s", ROOT.paths)
-        ROOT.i_path = 0
+    if isinstance(APP.paths, list):
+        LOG.debug("Set paths to %s", APP.paths)
+        APP.i_path = 0
         im_load()
 
 
 def error_show(msg: str):
     """Show error."""
-    ROOT.title(msg + " - " + TITLE)
+    APP.title(msg + " - " + TITLE)
     LOG.error(msg)
     ERROR_OVERLAY.config(text=msg)
     ERROR_OVERLAY.lift()
     info_set(msg)  # To copy.
-    ROOT.i_path_old = -1  # To refresh image info.
+    APP.i_path_old = -1  # To refresh image info.
 
 
 def help_toggle(event=None):
     """Toggle help."""
-    if ROOT.show_info and CANVAS.itemcget(CANVAS.text, "text").startswith("C - Set"):
+    if APP.show_info and CANVAS.itemcget(CANVAS.text, "text").startswith("C - Set"):
         info_hide()
     else:
         lines = []
@@ -389,14 +389,14 @@ def info_bg_update():
 
 def lines_toggle(event=None, on=None, off=None):
     """Toggle line overlay."""
-    ROOT.b_lines = True if on else False if off else not ROOT.b_lines  # NOSONAR
-    if not ROOT.b_lines and CANVAS.lines:
+    APP.b_lines = True if on else False if off else not APP.b_lines  # NOSONAR
+    if not APP.b_lines and CANVAS.lines:
         for line in CANVAS.lines:
             CANVAS.delete(line)
         CANVAS.lines = []
-    if ROOT.b_lines and not CANVAS.lines:
-        w = ROOT.winfo_width() - 1
-        h = ROOT.winfo_height() - 1
+    if APP.b_lines and not CANVAS.lines:
+        w = APP.winfo_width() - 1
+        h = APP.winfo_height() - 1
         CANVAS.lines.append(CANVAS.create_line(0, 0, w, 0, 0, h, w, h, fill="#f00"))  # type: ignore
         CANVAS.lines.append(CANVAS.create_line(0, h, 0, 0, w, h, w, 0, fill="#f00"))  # type: ignore
 
@@ -407,7 +407,7 @@ def load_mhtml(path):
         mhtml = f.read()
     boundary = re.search('boundary="(.+)"', mhtml).group(1)
     parts = mhtml.split(boundary)[1:-1]
-    ROOT.info["Names"] = []
+    APP.info["Names"] = []
     new_parts = []
     for p in parts:
         meta, data = p.split("\n\n", maxsplit=1)
@@ -417,13 +417,13 @@ def load_mhtml(path):
         if "\ncontent-type:" in m and "\ncontent-type: image" not in m:
             continue
         name = sorted(meta.strip().split("\n"))[0].split("/")[-1]
-        ROOT.info["Names"].append(name)
+        APP.info["Names"].append(name)
         new_parts.append(data)
-    LOG.debug("%s", f"Getting part {ROOT.i_zip}/{len(new_parts)} of {len(parts)}.")
-    data = new_parts[ROOT.i_zip]
+    LOG.debug("%s", f"Getting part {APP.i_zip}/{len(new_parts)} of {len(parts)}.")
+    data = new_parts[APP.i_zip]
     try:
         im_file = BytesIO(base64.standard_b64decode(data.rstrip()))
-        ROOT.im = Image.open(im_file)
+        APP.im = Image.open(im_file)
     except ValueError as ex:
         LOG.error("Failed to split mhtml: %s", ex)
         LOG.error("DATA %r", data[:180])
@@ -473,27 +473,27 @@ def load_svg(fpath):
     surface = pygame.image.load(BytesIO(data.encode()))
     bf = BytesIO()
     pygame.image.save(surface, bf, "png")
-    ROOT.im = Image.open(bf)
+    APP.im = Image.open(bf)
 
 
 def load_zip(path):
     """Load a zip file."""
     with zipfile.ZipFile(path, "r") as zf:
         names = zf.namelist()
-        ROOT.info["Names"] = names
-        LOG.debug("Loading name index %s", ROOT.i_zip)
+        APP.info["Names"] = names
+        LOG.debug("Loading name index %s", APP.i_zip)
         # pylint: disable=consider-using-with
-        ROOT.im = Image.open(zf.open(names[ROOT.i_zip]))
+        APP.im = Image.open(zf.open(names[APP.i_zip]))
 
 
 def im_load(path=None):
     """Load image."""
-    if not path and ROOT.paths:
-        path = ROOT.paths[ROOT.i_path]
+    if not path and APP.paths:
+        path = APP.paths[APP.i_path]
     else:
         return
 
-    msg = f"{ROOT.i_path+1}/{len(ROOT.paths)}"
+    msg = f"{APP.i_path+1}/{len(APP.paths)}"
     LOG.debug("Loading %s %s", msg, path)
 
     err_msg = ""
@@ -507,19 +507,19 @@ def im_load(path=None):
             elif path.suffix in (".eml", ".mht", ".mhtml"):
                 load_mhtml(path)
             else:
-                ROOT.im = Image.open(path)
-        LOG.debug("Cached %s PIL_IMAGE", ROOT.im.size)
-        ROOT.im_frame = 0
-        if hasattr(ROOT.im, "n_frames"):
-            ROOT.info["Frames"] = ROOT.im.n_frames
-        ROOT.info.update(**ROOT.im.info)
-        for k, v in ROOT.info.items():
+                APP.im = Image.open(path)
+        LOG.debug("Cached %s PIL_IMAGE", APP.im.size)
+        APP.im_frame = 0
+        if hasattr(APP.im, "n_frames"):
+            APP.info["Frames"] = APP.im.n_frames
+        APP.info.update(**APP.im.info)
+        for k, v in APP.info.items():
             LOG.debug(
                 "%s: %s",
                 k,
                 str(v)[:80] + "..." if len(str(v)) > 80 else v,
             )
-        im_resize(ROOT.b_animate)
+        im_resize(APP.b_animate)
     # pylint: disable=W0718
     except (
         tkinter.TclError,
@@ -533,7 +533,7 @@ def im_load(path=None):
         BaseException,  # NOSONAR  # https://github.com/PyO3/pyo3/issues/3519
     ) as ex:
         err_msg = f"im_load {type(ex).__name__}: {ex}"
-        ROOT.im = None
+        APP.im = None
         msg = f"{msg} {err_msg} {path}"
         error_show(msg)
         raise
@@ -542,12 +542,12 @@ def im_load(path=None):
 def get_fit_ratio(im_w, im_h):
     """Get fit ratio."""
     ratio = 1.0
-    w = ROOT.winfo_width()
-    h = ROOT.winfo_height()
+    w = APP.winfo_width()
+    h = APP.winfo_height()
     if (
-        ((ROOT.fit == Fits.ALL) and (im_w != w or im_h != h))
-        or ((ROOT.fit == Fits.BIG) and (im_w > w or im_h > h))
-        or ((ROOT.fit == Fits.SMALL) and (im_w < w and im_h < h))
+        ((APP.fit == Fits.ALL) and (im_w != w or im_h != h))
+        or ((APP.fit == Fits.BIG) and (im_w > w or im_h > h))
+        or ((APP.fit == Fits.SMALL) and (im_w < w and im_h < h))
     ):
         ratio = min(w / im_w, h / im_h)
     return ratio
@@ -558,59 +558,59 @@ def im_fit(im):
     w, h = im.size
     ratio = get_fit_ratio(w, h)
     if ratio != 1.0:  # NOSONAR
-        im = im.resize((int(w * ratio), int(h * ratio)), ROOT.quality)
+        im = im.resize((int(w * ratio), int(h * ratio)), APP.quality)
     return im
 
 
 def im_scale(im):
     """Scale image."""
     im_w, im_h = im.size
-    ratio = ROOT.im_scale * get_fit_ratio(im_w, im_h)
+    ratio = APP.im_scale * get_fit_ratio(im_w, im_h)
     try:
         new_w = int(ratio * im_w)
         new_h = int(ratio * im_h)
         if new_w < 1 or new_h < 1:
             LOG.error("Too small. Scaling up.")
-            ROOT.im_scale = max(SCALE_MIN, min(ROOT.im_scale * 1.1, SCALE_MAX))
+            APP.im_scale = max(SCALE_MIN, min(APP.im_scale * 1.1, SCALE_MAX))
             im = im_scale(im)
         else:
-            im = ROOT.im.resize((new_w, new_h), ROOT.quality)
+            im = APP.im.resize((new_w, new_h), APP.quality)
     except MemoryError as ex:
         LOG.error("Out of memory. Scaling down. %s", ex)
-        ROOT.im_scale = max(SCALE_MIN, min(ROOT.im_scale * 0.9, SCALE_MAX))
+        APP.im_scale = max(SCALE_MIN, min(APP.im_scale * 0.9, SCALE_MAX))
 
     return im
 
 
 def im_resize(loop=False):
     """Resize image."""
-    if not ROOT.im:
+    if not (hasattr(APP, "im") and APP.im):
         return
 
-    im = ROOT.im.copy()
+    im = APP.im.copy()
 
-    if ROOT.fit:
-        im = im_fit(ROOT.im)
+    if APP.fit:
+        im = im_fit(APP.im)
 
-    if ROOT.im_scale != 1:
-        im = im_scale(ROOT.im)
+    if APP.im_scale != 1:
+        im = im_scale(APP.im)
 
-    if ROOT.transpose_type != -1:
-        LOG.debug("Transposing %s", Transpose(ROOT.transpose_type))
-        im = im.transpose(ROOT.transpose_type)
+    if APP.transpose_type != -1:
+        LOG.debug("Transposing %s", Transpose(APP.transpose_type))
+        im = im.transpose(APP.transpose_type)
 
     im_show(im)
 
-    if loop and hasattr(ROOT.im, "n_frames") and ROOT.im.n_frames > 1:
-        ROOT.im_frame = (ROOT.im_frame + 1) % ROOT.im.n_frames
+    if loop and hasattr(APP.im, "n_frames") and APP.im.n_frames > 1:
+        APP.im_frame = (APP.im_frame + 1) % APP.im.n_frames
         try:
-            ROOT.im.seek(ROOT.im_frame)
+            APP.im.seek(APP.im_frame)
         except EOFError as ex:
             LOG.error("IMAGE EOF. %s", ex)
-        duration = int(ROOT.info["duration"] or 100) if "duration" in ROOT.info else 100
-        if hasattr(ROOT, "animation"):
-            ROOT.after_cancel(ROOT.animation)
-        ROOT.animation = ROOT.after(duration, im_resize, ROOT.b_animate)
+        duration = int(APP.info["duration"] or 100) if "duration" in APP.info else 100
+        if hasattr(APP, "animation"):
+            APP.after_cancel(APP.animation)
+        APP.animation = APP.after(duration, im_resize, APP.b_animate)
 
 
 def im_show(im):
@@ -620,7 +620,7 @@ def im_show(im):
         CANVAS.itemconfig(CANVAS.image_ref, image=CANVAS.tkim, anchor="center")
 
         try:
-            rw, rh = ROOT.winfo_width(), ROOT.winfo_height()
+            rw, rh = APP.winfo_width(), APP.winfo_height()
             x, y, x2, y2 = CANVAS.bbox(CANVAS.image_ref)
             w = x2 - x
             h = y2 - y
@@ -635,27 +635,27 @@ def im_show(im):
         ERROR_OVERLAY.lower()
     except MemoryError as ex:
         LOG.error("Out of memory. Scaling down. %s", ex)
-        ROOT.im_scale = max(SCALE_MIN, min(ROOT.im_scale * 0.9, SCALE_MAX))
+        APP.im_scale = max(SCALE_MIN, min(APP.im_scale * 0.9, SCALE_MAX))
         return
 
     zip_info = (
-        f" {ROOT.i_zip + 1}/{len(ROOT.info['Names'])} {ROOT.info['Names'][ROOT.i_zip]}"
-        if "Names" in ROOT.info
+        f" {APP.i_zip + 1}/{len(APP.info['Names'])} {APP.info['Names'][APP.i_zip]}"
+        if "Names" in APP.info
         else ""
     )
     msg = (
-        f"{ROOT.i_path+1}/{len(ROOT.paths)}{zip_info} {'%sx%s' % ROOT.im.size}"
-        f" @ {'%sx%s' % im.size} {ROOT.paths[ROOT.i_path]}"
+        f"{APP.i_path+1}/{len(APP.paths)}{zip_info} {'%sx%s' % APP.im.size}"
+        f" @ {'%sx%s' % im.size} {APP.paths[APP.i_path]}"
     )
-    ROOT.title(msg + " - " + TITLE)
-    if ROOT.show_info and (
-        not hasattr(ROOT, "i_path_old")
-        or ROOT.i_path != ROOT.i_path_old
-        or not hasattr(ROOT, "i_path_old")
-        or ROOT.i_zip != ROOT.i_zip_old
+    APP.title(msg + " - " + TITLE)
+    if APP.show_info and (
+        not hasattr(APP, "i_path_old")
+        or APP.i_path != APP.i_path_old
+        or not hasattr(APP, "i_path_old")
+        or APP.i_zip != APP.i_zip_old
     ):
-        ROOT.i_path_old = ROOT.i_path
-        ROOT.i_zip_old = ROOT.i_zip
+        APP.i_path_old = APP.i_path
+        APP.i_zip_old = APP.i_zip
         info_set(msg + info_get())
     scrollbars_set()
 
@@ -687,7 +687,7 @@ def info_decode(b: bytes, encoding: str) -> str:
 def info_get() -> str:
     """Get image info."""
     msg = ""
-    for k, v in ROOT.info.items():
+    for k, v in APP.info.items():
         if k in ("exif", "icc_profile", "photoshop", "XML:com.adobe.xmp", "Names"):
             continue
 
@@ -704,13 +704,13 @@ def info_get() -> str:
         else:
             msg += f"\n{k}: {v}"
             # msg += f"\n{k}: {(str(v)[:80] + '...') if len(str(v)) > 80 else v}"
-    if not ROOT.im:
+    if not APP.im:
         return msg
 
     CANVAS.config(cursor="watch")  # Invisible on Windows 11?! XXX
-    msg += f"\nFormat: {ROOT.im.format}"
+    msg += f"\nFormat: {APP.im.format}"
     try:
-        msg += f"\nMIME type: {ROOT.im.get_format_mimetype()}"  # type: ignore
+        msg += f"\nMIME type: {APP.im.get_format_mimetype()}"  # type: ignore
     except AttributeError:
         pass
 
@@ -726,15 +726,15 @@ def info_get() -> str:
 def info_exif() -> str:
     """Return Exchangeable Image File (EXIF) info."""
     # Workaround from https://github.com/python-pillow/Pillow/issues/5863
-    if not hasattr(ROOT.im, "_getexif"):
+    if not hasattr(APP.im, "_getexif"):
         return ""
 
-    exif = ROOT.im._getexif()  # type: ignore  # pylint: disable=protected-access
+    exif = APP.im._getexif()  # type: ignore  # pylint: disable=protected-access
     if not exif:
         return ""
     LOG.debug("Got exif dict: %s", exif)
-    LOG.debug("im.exif bytes: %s", ROOT.info["exif"].replace(b"\0", b""))
-    encoding = "utf_16_be" if b"MM" in ROOT.info["exif"][:8] else "utf_16_le"
+    LOG.debug("im.exif bytes: %s", APP.info["exif"].replace(b"\0", b""))
+    encoding = "utf_16_be" if b"MM" in APP.info["exif"][:8] else "utf_16_le"
     LOG.debug("Encoding: %s", encoding)
     s = f"EXIF: {encoding}"
     for key, val in exif.items():
@@ -792,7 +792,7 @@ def info_exiftool() -> str:
         #         for k, v in d.items():
         #             s += f"\n{k}: {v}"
         output = subprocess.run(
-            ["exiftool", ROOT.paths[ROOT.i_path]],
+            ["exiftool", APP.paths[APP.i_path]],
             capture_output=True,
             check=False,
             text=False,
@@ -811,7 +811,7 @@ def info_exiftool() -> str:
 def info_icc() -> str:
     """Return the ICC color profile info."""
     s = ""
-    icc = ROOT.im.info.get("icc_profile")  # type: ignore
+    icc = APP.im.info.get("icc_profile")  # type: ignore
     if icc:
         p = ImageCms.ImageCmsProfile(BytesIO(icc))
         intent = ImageCms.getDefaultIntent(p)
@@ -832,7 +832,7 @@ isIntentSupported: {ImageCms.isIntentSupported(p, intent, 1)}"""
 def info_iptc() -> str:
     """Return IPTC metadata."""
     s = ""
-    iptc = IptcImagePlugin.getiptcinfo(ROOT.im)
+    iptc = IptcImagePlugin.getiptcinfo(APP.im)
     if iptc:
         s += "IPTC:"
         for k, v in iptc.items():
@@ -842,10 +842,10 @@ def info_iptc() -> str:
 
 def info_psd() -> str:
     """Return PhotoShop Document info."""
-    if "photoshop" not in ROOT.info:
+    if "photoshop" not in APP.info:
         return ""
     s = "Photoshop:\n"
-    for k, v in ROOT.info["photoshop"].items():
+    for k, v in APP.info["photoshop"].items():
         readable_v = re.sub(r"(\\x..){2,}", " ", str(v)).replace(r"\\0", "")
         # readable_v = re.sub(
         #     r"\\0", "", re.sub(r"(\\x..){2,}", " ", str(v))
@@ -875,8 +875,8 @@ def info_psd() -> str:
 def info_xmp() -> str:
     """Return XMP metadata."""
     s = ""
-    if hasattr(ROOT.im, "getxmp"):
-        xmp = ROOT.im.getxmp()  # type: ignore
+    if hasattr(APP.im, "getxmp"):
+        xmp = APP.im.getxmp()  # type: ignore
         if xmp:
             s += "XMP:\n"
             s += yaml.safe_dump(xmp)
@@ -891,8 +891,8 @@ def info_xmp() -> str:
 
 def info_toggle(event=None):
     """Toggle info overlay."""
-    if not ROOT.show_info or CANVAS.itemcget(CANVAS.text, "text").startswith("C - Set"):
-        info_set(ROOT.title() + info_get())
+    if not APP.show_info or CANVAS.itemcget(CANVAS.text, "text").startswith("C - Set"):
+        info_set(APP.title() + info_get())
         LOG.debug("Showing info:\n%s", CANVAS.itemcget(CANVAS.text, "text"))
         info_show()
     else:
@@ -901,7 +901,7 @@ def info_toggle(event=None):
 
 def info_show():
     """Show info overlay."""
-    ROOT.show_info = True
+    APP.show_info = True
     CANVAS.lift(CANVAS.text_bg)
     CANVAS.lift(CANVAS.text)
     scrollbars_set()
@@ -909,7 +909,7 @@ def info_show():
 
 def info_hide():
     """Hide info overlay."""
-    ROOT.show_info = False
+    APP.show_info = False
     CANVAS.lower(CANVAS.text_bg)
     CANVAS.lower(CANVAS.text)
     info_set(CANVAS.itemcget(CANVAS.text, "text")[:7])
@@ -929,7 +929,7 @@ def natural_sort(s):
 @log_this
 def path_open(event=None):
     """Pick a file to open...."""
-    filename = filedialog.askopenfilename(filetypes=ROOT.SUPPORTED_FILES_READ)
+    filename = filedialog.askopenfilename(filetypes=APP.SUPPORTED_FILES_READ)
     if filename:
         paths_update(None, filename)
 
@@ -937,30 +937,30 @@ def path_open(event=None):
 @log_this
 def path_save(event=None):
     """Save file as...."""
-    if "Names" in ROOT.info:
+    if "Names" in APP.info:
         p = pathlib.Path(
-            str(ROOT.paths[ROOT.i_path]) + "." + ROOT.info["Names"][ROOT.i_zip]
+            str(APP.paths[APP.i_path]) + "." + APP.info["Names"][APP.i_zip]
         )
     else:
-        p = ROOT.paths[ROOT.i_path]
+        p = APP.paths[APP.i_path]
 
-    LOG.debug("Image info to be saved: %s", ROOT.im.info)
+    LOG.debug("Image info to be saved: %s", APP.im.info)
     filename = filedialog.asksaveasfilename(
         initialfile=p.absolute(),
         defaultextension=p.suffix,
-        filetypes=ROOT.SUPPORTED_FILES_WRITE,
+        filetypes=APP.SUPPORTED_FILES_WRITE,
     )
     if filename:
         LOG.info("Saving %s", filename)
         try:
-            ROOT.im.save(
+            APP.im.save(
                 filename,
                 # dpi=INFO.get("dpi", b""),
                 # icc_profile=INFO.get("icc_profile", b""),
-                **ROOT.im.info,
+                **APP.im.info,
                 lossless=True,
                 optimize=True,
-                save_all=hasattr(ROOT.im, "n_frames"),  # All frames.
+                save_all=hasattr(APP.im, "n_frames"),  # All frames.
             )
             paths_update()
             toast(f"Saved {filename}")
@@ -973,33 +973,33 @@ def path_save(event=None):
 
 def paths_sort(path=None):
     """Sort paths."""
-    LOG.debug("Sorting %s", ROOT.sort)
+    LOG.debug("Sorting %s", APP.sort)
     if path:
         try:
-            ROOT.i_path = ROOT.paths.index(pathlib.Path(path))
+            APP.i_path = APP.paths.index(pathlib.Path(path))
         except ValueError:
             pass
-    elif ROOT.paths:
-        path = ROOT.paths[ROOT.i_path]
+    elif APP.paths:
+        path = APP.paths[APP.i_path]
     else:
         return
 
-    for s in ROOT.sort.split(","):
+    for s in APP.sort.split(","):
         if s == "natural":
-            ROOT.paths.sort(key=natural_sort)
+            APP.paths.sort(key=natural_sort)
         elif s == "ctime":
-            ROOT.paths.sort(key=os.path.getmtime)
+            APP.paths.sort(key=os.path.getmtime)
         elif s == "mtime":
-            ROOT.paths.sort(key=os.path.getmtime)
+            APP.paths.sort(key=os.path.getmtime)
         elif s == "random":
-            random.shuffle(ROOT.paths)
+            random.shuffle(APP.paths)
         elif s == "size":
-            ROOT.paths.sort(key=os.path.getsize)
+            APP.paths.sort(key=os.path.getsize)
         elif s == "string":
-            ROOT.paths.sort()
+            APP.paths.sort()
 
     try:
-        ROOT.i_path = ROOT.paths.index(pathlib.Path(path))
+        APP.i_path = APP.paths.index(pathlib.Path(path))
         im_load()
     except ValueError as ex:
         error_show("Not found: %s" % ex)
@@ -1009,32 +1009,32 @@ def paths_sort(path=None):
 def paths_update(event=None, path=None):
     """Update path info."""
     if not path:
-        path = ROOT.paths[ROOT.i_path]
+        path = APP.paths[APP.i_path]
 
     p = pathlib.Path(path)
     if not p.is_dir():
         p = p.parent
     LOG.debug("Reading %s...", p)
-    ROOT.paths = list(p.glob("*"))
-    LOG.debug("Found %s files.", len(ROOT.paths))
+    APP.paths = list(p.glob("*"))
+    LOG.debug("Found %s files.", len(APP.paths))
     LOG.debug("Filter?")
     paths_sort(path)
 
 
 def refresh_loop():
     """Autoupdate paths."""
-    if ROOT.update_interval > 0:
+    if APP.update_interval > 0:
         paths_update()
-        if hasattr(ROOT, "path_updater"):
-            ROOT.after_cancel(ROOT.path_updater)
-        ROOT.path_updater = ROOT.after(ROOT.update_interval, refresh_loop)
+        if hasattr(APP, "path_updater"):
+            APP.after_cancel(APP.path_updater)
+        APP.path_updater = APP.after(APP.update_interval, refresh_loop)
 
 
 def refresh_toggle(event=None):
     """Toggle autoupdate."""
-    ROOT.update_interval = -ROOT.update_interval
-    if ROOT.update_interval > 0:
-        toast(f"Refreshing every {ROOT.update_interval/1000:.2}s.")
+    APP.update_interval = -APP.update_interval
+    if APP.update_interval > 0:
+        toast(f"Refreshing every {APP.update_interval/1000:.2}s.")
         refresh_loop()
     else:
         toast("Refresh off.")
@@ -1042,8 +1042,8 @@ def refresh_toggle(event=None):
 
 def resize_handler(event=None):
     """Handle Tk resize event."""
-    new_size = ROOT.winfo_geometry().split("+", maxsplit=1)[0]
-    if ROOT.s_geo == new_size:
+    new_size = APP.winfo_geometry().split("+", maxsplit=1)[0]
+    if APP.s_geo == new_size:
         return
     ERROR_OVERLAY.config(wraplength=event.width)
     TOAST.config(wraplength=event.width)
@@ -1055,12 +1055,12 @@ def resize_handler(event=None):
     if bb != CANVAS.bbox(CANVAS.text):
         info_bg_update()
 
-    if ROOT.fit:
+    if APP.fit:
         im_resize()
 
     scrollbars_set()
 
-    ROOT.s_geo = new_size
+    APP.s_geo = new_size
 
 
 def scroll(event):
@@ -1079,8 +1079,8 @@ def scroll(event):
 
 def scrollbars_set():
     """Hide/show scrollbars."""
-    win_h = ROOT.winfo_height()
-    win_w = ROOT.winfo_width()
+    win_h = APP.winfo_height()
+    win_w = APP.winfo_width()
     try:
         x, y, x2, y2 = CANVAS.bbox(CANVAS.image_ref, CANVAS.text)
         can_w = x2 - x
@@ -1145,35 +1145,37 @@ def scrollbars_set():
 
         scrollregion = (min(x, 0), min(y, 0), x + can_w, y + can_h)
         CANVAS.config(scrollregion=scrollregion)
-        if ROOT.i_path != ROOT.i_scroll:
+        if APP.i_path != APP.i_scroll:
             CANVAS.xview_moveto(0)
             CANVAS.yview_moveto(0)
-            ROOT.i_scroll = ROOT.i_path
+            APP.i_scroll = APP.i_path
     except TypeError as ex:
         LOG.error(ex)
 
 
 def set_bg(event=None):
     """Set background color."""
-    ROOT.i_bg += 1
-    if ROOT.i_bg >= len(BG_COLORS):
-        ROOT.i_bg = 0
-    bg = BG_COLORS[ROOT.i_bg]
-    ROOT.config(bg=bg)
+    APP.i_bg += 1
+    if APP.i_bg >= len(BG_COLORS):
+        APP.i_bg = 0
+    bg = BG_COLORS[APP.i_bg]
+    fg = "black" if APP.i_bg == len(BG_COLORS) - 1 else "white"
+    APP.config(bg=bg)
     CANVAS.config(bg=bg)
     CANVAS.itemconfig(CANVAS.im_bg, fill=bg)
     ERROR_OVERLAY.config(bg=bg)
-    MENU.config(bg=bg, fg="black" if ROOT.i_bg == len(BG_COLORS) - 1 else "white")
-    ttk.Style().configure("TSizegrip", background=bg)
+    MENU.config(bg=bg, fg=fg)
+    style.configure("TScrollbar", troughcolor=bg)
+    style.configure("TSizegrip", background=bg)
 
 
 @log_this
 def set_order(event=None):
     """Set order."""
-    i = SORTS.index(ROOT.sort) if ROOT.sort in SORTS else -1
+    i = SORTS.index(APP.sort) if APP.sort in SORTS else -1
     i = (i + 1) % len(SORTS)
-    ROOT.sort = SORTS[i]
-    s = "Sort: " + ROOT.sort
+    APP.sort = SORTS[i]
+    s = "Sort: " + APP.sort
     LOG.info(s)
     toast(s)
     paths_sort()
@@ -1183,7 +1185,7 @@ def set_stats(path):
     """Set stats."""
     stats = os.stat(path)
     LOG.debug("Stat: %s", stats)
-    ROOT.info = {
+    APP.info = {
         # "Path": pathlib.Path(path),
         "Size": f"{stats.st_size:,} B",
         "Accessed": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stats.st_atime)),
@@ -1211,7 +1213,7 @@ def set_supported_files():
     for k, v in exts.items():
         type_exts.setdefault(v, []).append(k)
 
-    ROOT.SUPPORTED_FILES_READ = [
+    APP.SUPPORTED_FILES_READ = [
         (
             "All supported files",
             " ".join(sorted(list(k for k, v in exts.items() if v in Image.OPEN))),
@@ -1220,7 +1222,7 @@ def set_supported_files():
         ("Archives", ".eml .mht .mhtml .zip"),
         *sorted((k, v) for k, v in type_exts.items() if k in Image.OPEN),
     ]
-    ROOT.SUPPORTED_FILES_WRITE = [
+    APP.SUPPORTED_FILES_WRITE = [
         (
             "All supported files",
             " ".join(sorted(list(k for k, v in exts.items() if v in Image.SAVE))),
@@ -1252,26 +1254,26 @@ def set_supported_files():
 
 def quality_set(event=None):
     """Set resize quality."""
-    i = RESIZE_QUALITY.index(ROOT.quality)
+    i = RESIZE_QUALITY.index(APP.quality)
     i += -1 if event and event.keysym == "Q" else 1
     if i >= len(RESIZE_QUALITY):
         i = 0
     if i < 0:
         i = len(RESIZE_QUALITY) - 1
-    ROOT.quality = RESIZE_QUALITY[i]
-    toast(f"Quality: {Image.Resampling(ROOT.quality).name}")
+    APP.quality = RESIZE_QUALITY[i]
+    toast(f"Quality: {Image.Resampling(APP.quality).name}")
     im_resize()
 
 
 @log_this
 def set_verbosity(event=None):
     """Set verbosity."""
-    ROOT.verbosity -= 10
-    if ROOT.verbosity < 10:
-        ROOT.verbosity = logging.CRITICAL
+    APP.verbosity -= 10
+    if APP.verbosity < 10:
+        APP.verbosity = logging.CRITICAL
 
-    logging.basicConfig(level=ROOT.verbosity)  # Show up in nested shells in Windows 11.
-    LOG.setLevel(ROOT.verbosity)
+    logging.basicConfig(level=APP.verbosity)  # Show up in nested shells in Windows 11.
+    LOG.setLevel(APP.verbosity)
     s = "Log level %s" % logging.getLevelName(LOG.getEffectiveLevel())
     toast(s)
     print(s)
@@ -1279,17 +1281,17 @@ def set_verbosity(event=None):
 
 def slideshow_run(event=None):
     """Run slideshow."""
-    if ROOT.b_slideshow:
+    if APP.b_slideshow:
         browse()
-        ROOT.after(ROOT.slideshow_pause, slideshow_run)
+        APP.after(APP.slideshow_pause, slideshow_run)
 
 
 def slideshow_toggle(event=None):
     """Toggle slideshow."""
-    ROOT.b_slideshow = not ROOT.b_slideshow
-    if ROOT.b_slideshow:
+    APP.b_slideshow = not APP.b_slideshow
+    if APP.b_slideshow:
         toast("Starting slideshow.")
-        ROOT.after(ROOT.slideshow_pause, slideshow_run)
+        APP.after(APP.slideshow_pause, slideshow_run)
     else:
         toast("Stopping slideshow.")
 
@@ -1298,22 +1300,22 @@ def toast(msg: str, ms: int = 2000, fg="#00FF00"):
     """Temporarily show a status message."""
     TOAST.config(text=msg, fg=fg)
     TOAST.lift()
-    if hasattr(ROOT, "toast_timer"):
-        ROOT.after_cancel(ROOT.toast_timer)
-    ROOT.toast_timer = ROOT.after(ms, TOAST.lower)
+    if hasattr(APP, "toast_timer"):
+        APP.after_cancel(APP.toast_timer)
+    APP.toast_timer = APP.after(ms, TOAST.lower)
 
 
 @log_this
 def transpose_set(event=None):
     """Transpose image."""
-    ROOT.transpose_type += -1 if event and event.keysym == "T" else 1
-    if ROOT.transpose_type >= len(Transpose):
-        ROOT.transpose_type = -1
-    if ROOT.transpose_type < -1:
-        ROOT.transpose_type = len(Transpose) - 1
+    APP.transpose_type += -1 if event and event.keysym == "T" else 1
+    if APP.transpose_type >= len(Transpose):
+        APP.transpose_type = -1
+    if APP.transpose_type < -1:
+        APP.transpose_type = len(Transpose) - 1
 
-    if ROOT.transpose_type >= 0:
-        toast(f"Transpose: {Transpose(ROOT.transpose_type).name}")
+    if APP.transpose_type >= 0:
+        toast(f"Transpose: {Transpose(APP.transpose_type).name}")
     else:
         toast("Transpose: Normal")
     im_resize()
@@ -1322,33 +1324,33 @@ def transpose_set(event=None):
 @log_this
 def fit_handler(event=None):
     """Resize type to fit window."""
-    ROOT.fit = (ROOT.fit + 1) % len(Fits)
-    toast(str(Fits(ROOT.fit)))
+    APP.fit = (APP.fit + 1) % len(Fits)
+    toast(str(Fits(APP.fit)))
     im_resize()
 
 
 @log_this
 def fullscreen_toggle(event=None):
     """Toggle fullscreen."""
-    if not ROOT.overrideredirect():
-        ROOT.old_geometry = ROOT.geometry()
-        ROOT.old_state = ROOT.state()
-        LOG.debug("Old widow geometry: %s", ROOT.old_geometry)
-        ROOT.overrideredirect(True)
-        ROOT.state("zoomed")
+    if not APP.overrideredirect():
+        APP.old_geometry = APP.geometry()
+        APP.old_state = APP.state()
+        LOG.debug("Old widow geometry: %s", APP.old_geometry)
+        APP.overrideredirect(True)
+        APP.state("zoomed")
     else:
-        ROOT.overrideredirect(False)
-        ROOT.state(ROOT.old_state)
-        if ROOT.state() == "normal":
+        APP.overrideredirect(False)
+        APP.state(APP.old_state)
+        if APP.state() == "normal":
             new_geometry = (
                 "300x200+300+200"
-                if ROOT.old_geometry.startswith("1x1")  # Window wasn't visible yet.
-                else ROOT.old_geometry
+                if APP.old_geometry.startswith("1x1")  # Window wasn't visible yet.
+                else APP.old_geometry
             )
             LOG.debug("Restoring geometry: %s", new_geometry)
-            ROOT.geometry(new_geometry)
+            APP.geometry(new_geometry)
     # Keeps using display 1
-    # root.attributes("-fullscreen", not root.attributes("-fullscreen"))
+    # APP.attributes("-fullscreen", not APP.attributes("-fullscreen"))
 
 
 def str2float(s: str) -> float:
@@ -1365,12 +1367,12 @@ def zoom(event):
     if event.num == 4 or event.delta < 0:
         k = "minus"
     if k in ("plus", "equal"):
-        ROOT.im_scale *= 1.1
+        APP.im_scale *= 1.1
     elif k == "minus":
-        ROOT.im_scale *= 0.9
+        APP.im_scale *= 0.9
     else:
-        ROOT.im_scale = 1
-    ROOT.im_scale = max(SCALE_MIN, min(ROOT.im_scale, SCALE_MAX))
+        APP.im_scale = 1
+    APP.im_scale = max(SCALE_MIN, min(APP.im_scale, SCALE_MAX))
     im_resize()
 
 
@@ -1383,15 +1385,15 @@ def zoom_text(event):
     if event.num == 4 or event.delta < 0:
         k = "minus"
     if k in ("plus", "equal"):
-        ROOT.f_text_scale *= 1.1
+        APP.f_text_scale *= 1.1
     elif k == "minus":
-        ROOT.f_text_scale *= 0.9
+        APP.f_text_scale *= 0.9
     else:
-        ROOT.f_text_scale = 1
-    ROOT.f_text_scale = max(0.1, min(ROOT.f_text_scale, 20))
-    new_font_size = int(FONT_SIZE * ROOT.f_text_scale)
+        APP.f_text_scale = 1
+    APP.f_text_scale = max(0.1, min(APP.f_text_scale, 20))
+    new_font_size = int(FONT_SIZE * APP.f_text_scale)
     new_font_size = max(1, min(new_font_size, 200))
-    LOG.info("Text scale: %s New font size: %s", ROOT.f_text_scale, new_font_size)
+    LOG.info("Text scale: %s New font size: %s", APP.f_text_scale, new_font_size)
 
     ERROR_OVERLAY.config(font=("Consolas", new_font_size))
     TOAST.config(font=("Consolas", new_font_size * 2))
@@ -1399,24 +1401,22 @@ def zoom_text(event):
     info_bg_update()
 
 
-ROOT = TkinterDnD.Tk()  # notice - use this instead of tk.Tk()
-ROOT.drop_target_register(DND_FILES)
-ROOT.dnd_bind("<<Drop>>", drop_handler)
-ROOT.show_info = False
-ROOT.title(TITLE)
-root_w, root_h = int(ROOT.winfo_screenwidth() * 0.75), int(
-    ROOT.winfo_screenheight() * 0.75
-)
-geometry = f"{root_w}x{root_h}+{int(root_w * 0.125)}+{int(root_h * 0.125)}"
-ROOT.geometry(geometry)
+APP = TkinterDnD.Tk()  # notice - use this instead of tk.Tk()
+APP.drop_target_register(DND_FILES)
+APP.dnd_bind("<<Drop>>", drop_handler)
+APP.show_info = False
+APP.title(TITLE)
+APP_w, APP_h = int(APP.winfo_screenwidth() * 0.75), int(APP.winfo_screenheight() * 0.75)
+geometry = f"{APP_w}x{APP_h}+{int(APP_w * 0.125)}+{int(APP_h * 0.125)}"
+APP.geometry(geometry)
 
 TOAST = tkinter.Label(
-    ROOT,
+    APP,
     text="status",
     font=("Consolas", FONT_SIZE * 2),
     fg="#00FF00",
     bg="black",
-    wraplength=root_w,
+    wraplength=APP_w,
     anchor="center",
     justify="center",
 )
@@ -1436,14 +1436,17 @@ CANVAS.text = CANVAS.create_text(  # type: ignore
     text="status",
     fill="#ff0",
     font=("Consolas", FONT_SIZE),
-    width=root_w,
+    width=APP_w,
 )
-CANVAS.im_bg = CANVAS.create_rectangle(0, 0, root_w, root_h, fill="black", width=0)  # type: ignore
-CANVAS.image_ref = CANVAS.create_image(root_w // 2, root_h // 2, anchor="center")  # type: ignore
-ROOT.update()
-SCROLLX = tkinter.Scrollbar(ROOT, orient="horizontal", command=CANVAS.xview)
-SCROLLY = tkinter.Scrollbar(ROOT, command=CANVAS.yview)
-GRIP = ttk.Sizegrip(ROOT)
+CANVAS.im_bg = CANVAS.create_rectangle(0, 0, APP_w, APP_h, fill="black", width=0)  # type: ignore
+CANVAS.image_ref = CANVAS.create_image(APP_w // 2, APP_h // 2, anchor="center")  # type: ignore
+style = ttk.Style()
+# LOG.debug("Theme names %s", style.theme_names())
+style.theme_use("classic")
+APP.update()
+SCROLLX = ttk.Scrollbar(APP, orient="horizontal", command=CANVAS.xview)
+SCROLLY = ttk.Scrollbar(APP, command=CANVAS.yview)
+GRIP = ttk.Sizegrip(APP)
 GRIP.pack(side="bottom", anchor="se")
 
 CANVAS.config(
@@ -1453,17 +1456,17 @@ CANVAS.config(
     yscrollincrement=1,
 )
 ERROR_OVERLAY = tkinter.Label(
-    ROOT,
+    APP,
     compound="center",
     fg="red",
     font=("Consolas", FONT_SIZE),
-    width=root_w,
-    height=root_h,
-    wraplength=root_w,
+    width=APP_w,
+    height=APP_h,
+    wraplength=APP_w,
 )
 ERROR_OVERLAY.place(x=0, y=0, relwidth=1, relheight=1)
 
-MENU = tkinter.Menu(ROOT, tearoff=0)
+MENU = tkinter.Menu(APP, tearoff=0)
 
 BINDS = [
     (set_bg, "c"),
@@ -1508,55 +1511,55 @@ BINDS = [
 
 def main(args):
     """Main function."""
-    ROOT.b_animate = True
-    ROOT.b_lines = False
-    ROOT.b_slideshow = False
-    ROOT.i_bg = -1
-    ROOT.i_path = 0
-    ROOT.i_scroll = -1
-    ROOT.i_zip = 0
-    ROOT.im_scale = 1.0
-    ROOT.info = {}
-    ROOT.f_text_scale = 1.0
-    ROOT.s_geo = ""
-    ROOT.transpose_type = -1
-    ROOT.update_interval = -4000
+    APP.b_animate = True
+    APP.b_lines = False
+    APP.b_slideshow = False
+    APP.i_bg = -1
+    APP.i_path = 0
+    APP.i_scroll = -1
+    APP.i_zip = 0
+    APP.im_scale = 1.0
+    APP.info = {}
+    APP.f_text_scale = 1.0
+    APP.s_geo = ""
+    APP.transpose_type = -1
+    APP.update_interval = -4000
     if args.verbose:
-        ROOT.verbosity = VERBOSITY_LEVELS[
+        APP.verbosity = VERBOSITY_LEVELS[
             min(len(VERBOSITY_LEVELS) - 1, 1 + args.verbose)
         ]
         set_verbosity()
 
     LOG.debug("Args: %s", args)
-    ROOT.paths = []
+    APP.paths = []
 
     set_supported_files()
 
-    ROOT.fit = args.resize or 0
-    ROOT.quality = RESIZE_QUALITY[args.quality]
-    ROOT.transpose_type = args.transpose
+    APP.fit = args.resize or 0
+    APP.quality = RESIZE_QUALITY[args.quality]
+    APP.transpose_type = args.transpose
 
     # Needs visible window so wait for mainloop.
-    ROOT.after(10, paths_update, None, args.path)
-    ROOT.after(20, resize_handler, type("", (), {"width": root_w, "height": root_h}))
+    APP.after(10, paths_update, None, args.path)
+    APP.after(20, resize_handler, type("", (), {"width": APP_w, "height": APP_h}))
 
     if args.fullscreen:
-        ROOT.after(100, fullscreen_toggle)
+        APP.after(100, fullscreen_toggle)
 
     if args.geometry:
-        ROOT.geometry(args.geometry)
+        APP.geometry(args.geometry)
 
-    ROOT.sort = args.order if args.order else "natural"
+    APP.sort = args.order if args.order else "natural"
 
     if args.update:
-        ROOT.update_interval = args.update
-        ROOT.after(1000, refresh_loop)
+        APP.update_interval = args.update
+        APP.after(1000, refresh_loop)
 
     if args.slideshow:
-        ROOT.slideshow_pause = args.slideshow
+        APP.slideshow_pause = args.slideshow
         slideshow_toggle()
     else:
-        ROOT.slideshow_pause = 4000
+        APP.slideshow_pause = 4000
 
     # Prepare context menu.
     for fun, keys in BINDS:
@@ -1583,7 +1586,7 @@ def main(args):
 
     bind()
     set_bg()
-    ROOT.mainloop()
+    APP.mainloop()
 
 
 if __name__ == "__main__":
