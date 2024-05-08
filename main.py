@@ -290,9 +290,9 @@ def drag(event):
     new_x = max(0, min(APP.winfo_width() - w, x + dx))
     new_y = max(0, min(APP.winfo_height() - h, y + dy))
     if new_x == 0:
-        CANVAS.xview_scroll(-dx, "units")
+        CANVAS.xview_scroll(round(-dx / 10), "units")
     if new_y == 0:
-        CANVAS.yview_scroll(-dy, "units")
+        CANVAS.yview_scroll(round(-dy / 10), "units")
 
     dx, dy = new_x - x, new_y - y
     CANVAS.move(CANVAS.image_ref, dx, dy)
@@ -1067,14 +1067,14 @@ def scroll(event):
     """Scroll."""
     k = event.keysym
     if k == "Left":
-        CANVAS.xview_scroll(-10, "units")
+        CANVAS.xview_scroll(-1, "units")
     elif k == "Right":
-        CANVAS.xview_scroll(10, "units")
+        CANVAS.xview_scroll(1, "units")
         LOG.debug("After scrolling 10 px, xvieww returns: %s", CANVAS.xview())
     if k == "Up":
-        CANVAS.yview_scroll(-10, "units")
+        CANVAS.yview_scroll(-1, "units")
     elif k == "Down":
-        CANVAS.yview_scroll(10, "units")
+        CANVAS.yview_scroll(1, "units")
 
 
 def scrollbars_set():
@@ -1165,7 +1165,8 @@ def set_bg(event=None):
     CANVAS.itemconfig(CANVAS.im_bg, fill=bg)
     ERROR_OVERLAY.config(bg=bg)
     MENU.config(bg=bg, fg=fg)
-    style.configure("TScrollbar", troughcolor=bg)
+    style.configure("TScrollbar", troughcolor=bg, background=bg)
+    style.map("TScrollbar", background=[("pressed", "!disabled", fg), ("active", fg)])
     style.configure("TSizegrip", background=bg)
 
 
@@ -1451,9 +1452,9 @@ GRIP.pack(side="bottom", anchor="se")
 
 CANVAS.config(
     xscrollcommand=SCROLLX.set,
-    xscrollincrement=1,
+    xscrollincrement=10,
     yscrollcommand=SCROLLY.set,
-    yscrollincrement=1,
+    yscrollincrement=10,
 )
 ERROR_OVERLAY = tkinter.Label(
     APP,
@@ -1484,8 +1485,8 @@ BINDS = [
     (zoom_text, "Alt-MouseWheel Alt-minus Alt-plus Alt-equal"),
     (slideshow_toggle, "b Pause"),
     (browse_mouse, "MouseWheel"),
-    (browse_next, "Right Down Next Button-5"),
-    (browse_prev, "Left Up Prior Button-4 BackSpace"),
+    (browse_next, "Right Down Next space Button-5"),
+    (browse_prev, "Left Up Prior BackSpace Button-4"),
     (browse_end, "End"),
     (browse_home, "Key-1 Home"),
     (browse_percentage, "Key"),
