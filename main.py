@@ -51,6 +51,7 @@ RESIZE_QUALITY = [
 ]
 SCALE_MIN = 0.001
 SCALE_MAX = 40.0
+SCROLL_SPEED = 10.0
 SORTS = "natural string ctime mtime size".split()
 TITLE = __doc__.split("\n", 1)[0]
 VERBOSITY_LEVELS = [
@@ -290,9 +291,9 @@ def drag(event):
     new_x = max(0, min(APP.winfo_width() - w, x + dx))
     new_y = max(0, min(APP.winfo_height() - h, y + dy))
     if new_x == 0:
-        CANVAS.xview_scroll(round(-dx / 10), "units")
+        CANVAS.xview_scroll(round(-dx / SCROLL_SPEED), "units")
     if new_y == 0:
-        CANVAS.yview_scroll(round(-dy / 10), "units")
+        CANVAS.yview_scroll(round(-dy / SCROLL_SPEED), "units")
 
     dx, dy = new_x - x, new_y - y
     CANVAS.move(CANVAS.image_ref, dx, dy)
@@ -1452,9 +1453,9 @@ GRIP.pack(side="bottom", anchor="se")
 
 CANVAS.config(
     xscrollcommand=SCROLLX.set,
-    xscrollincrement=10,
+    xscrollincrement=SCROLL_SPEED,
     yscrollcommand=SCROLLY.set,
-    yscrollincrement=10,
+    yscrollincrement=SCROLL_SPEED,
 )
 ERROR_OVERLAY = tkinter.Label(
     APP,
