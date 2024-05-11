@@ -55,8 +55,8 @@ T Shift+T - Transpose image.
 Alt+MouseWheel Alt+Minus Alt+Plus Alt+Equal - Zoom text.
 B Pause - Toggle slideshow.
 MouseWheel - Previous/Next.
-Right Down PageDown Button-5 - Next.
-Left Up PageUp Button-4 BackSpace - Previous.
+Right Down PageDown space Button-5 - Next.
+Left Up PageUp BackSpace Button-4 - Previous.
 End - Last.
 Key-1 Home - First.
 Key - Shift+1-9 to go to 10 to 90 percent of the list.
@@ -70,8 +70,8 @@ Shift+U - Toggle autoupdate.
 Ctrl+C Ctrl+Insert - Copy info to clipboard.
 Ctrl+V Shift+Insert - Paste image from clipboard.
 V - Set verbosity.
-B1-Motion - Select area.
-B2-Motion - Drag image.
+B1-Motion - Drag image.
+B2-Motion - Select area.
 Button-3 - Show menu.
 L - Toggle line overlay.
 ```
