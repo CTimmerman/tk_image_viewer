@@ -53,6 +53,7 @@ SCALE_MIN = 0.001
 SCALE_MAX = 40.0
 SCROLL_SPEED = 10.0
 SORTS = "natural string ctime mtime size".split()
+TIME_FORMAT = "%Y-%m-%d %H:%M:%S%z"
 TITLE = __doc__.split("\n", 1)[0]
 VERBOSITY_LEVELS = [
     logging.CRITICAL,
@@ -257,7 +258,7 @@ def drag_begin(event):
         return
     CANVAS.dragx = CANVAS.canvasx(event.x)
     CANVAS.dragy = CANVAS.canvasy(event.y)
-    CANVAS.config(cursor="tcross" if event.num == 1 else "fleur")
+    CANVAS.config(cursor="fleur" if event.num == 1 else "tcross")
 
 
 @log_this
@@ -688,7 +689,17 @@ def info_get() -> str:
     """Get image info."""
     msg = ""
     for k, v in APP.info.items():
-        if k in ("exif", "icc_profile", "photoshop", "XML:com.adobe.xmp", "Names"):
+        # jfif attribute is just hex version in decimal.
+        if k in (
+            "dpi",
+            "exif",
+            "icc_profile",
+            "jfif",
+            "Names",
+            "photoshop",
+            "transparency",
+            "XML:com.adobe.xmp",
+        ):
             continue
 
         if k == "comment":
@@ -697,15 +708,19 @@ def info_get() -> str:
             except UnicodeDecodeError:
                 v = v.decode("utf_16_be")
         elif k == "jfif_unit":
-            msg += f"\n{k}: " + {0: "none", 1: "inch", 2: "cm"}.get(v, str(v))
+            v = {0: "none", 1: "inch", 2: "cm"}.get(v, v)
+        elif k == "jfif_version":
+            v = f"{v[0]}.0{v[1]}"
+        elif k == "loop":
+            v = {0: "infinite"}.get(v, v)
         # Image File Directories (IFD)
         elif k == "tag_v2":
-            meta_dict = {TiffTags.TAGS_V2[k2]: v2 for k2, v2 in v}
-            LOG.debug("tag_v2: %s", meta_dict)
-            msg += "\ntag_v2: {meta_dict}\n"
-        else:
-            msg += f"\n{k}: {v}"
-            # msg += f"\n{k}: {(str(v)[:80] + '...') if len(str(v)) > 80 else v}"
+            v = {TiffTags.TAGS_V2[k2]: v2 for k2, v2 in v}
+            LOG.debug("tag_v2: %s", v)
+        # PNG parameters
+        msg += f"\n{k}: {v}"
+        # PNG transparency
+        # msg += f"\n{k}: {(str(v)[:80] + '...') if len(str(v)) > 80 else v}"
     if not APP.im:
         return msg
 
@@ -790,7 +805,7 @@ def info_exiftool() -> str:
                 "exiftool",
                 "-duplicates",
                 "-groupHeadings",
-                "-unknown",
+                "-unknown2",
                 APP.paths[APP.i_path],
             ],
             capture_output=True,
@@ -955,8 +970,6 @@ def path_save(event=None):
         try:
             APP.im.save(
                 filename,
-                # dpi=INFO.get("dpi", b""),
-                # icc_profile=INFO.get("icc_profile", b""),
                 **APP.im.info,
                 lossless=True,
                 optimize=True,
@@ -1191,10 +1204,10 @@ def set_stats(path):
     APP.info = {
         # "Path": pathlib.Path(path),
         "Size": f"{stats.st_size:,} B",
-        "Accessed": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stats.st_atime)),
-        "Modified": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stats.st_mtime)),
+        "Accessed": time.strftime(TIME_FORMAT, time.localtime(stats.st_atime)),
+        "Modified": time.strftime(TIME_FORMAT, time.localtime(stats.st_mtime)),
         "Created": time.strftime(
-            "%Y-%m-%d %H:%M:%S",
+            TIME_FORMAT,
             time.localtime(
                 stats.st_birthtime if hasattr(stats, "st_birthtime") else stats.st_ctime
             ),
@@ -1502,8 +1515,8 @@ BINDS = [
     (clipboard_copy, "Control-c Control-Insert"),
     (clipboard_paste, "Control-v Shift-Insert"),
     (set_verbosity, "v"),
-    (select, "B1-Motion"),
-    (drag, "B2-Motion"),
+    (select, "B2-Motion"),
+    (drag, "B1-Motion"),
     (drag_begin, "ButtonPress"),
     (drag_end, "ButtonRelease"),
     (menu_show, "Button-3"),  # Or rather tk_popup in Ubuntu?
