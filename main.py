@@ -665,7 +665,7 @@ def info_decode(b: bytes, encoding: str) -> str:
     """Decodes a sequence of bytes, as stated by the method signature."""
     if not isinstance(b, bytes):
         return str(b)
-    print("BYTES!", str(b[:80]), "->", str(b.replace(b"\0", b"")))
+    LOG.debug("BYTES! %s", str(b[:40]))
     if b.startswith(b"ASCII\0\0\0"):
         return b[8:].decode("ascii")
     if b.startswith(b"UNICODE\0"):
@@ -681,8 +681,7 @@ def info_decode(b: bytes, encoding: str) -> str:
                 return b.decode(enc)
             except UnicodeDecodeError:
                 pass
-    return b.decode("ansi")
-    # return str(b.replace(b"\0", b""))
+    return re.sub("[^\x20-\x7F]+", " ", b.decode("ansi"))
 
 
 def info_get() -> str:
@@ -697,6 +696,8 @@ def info_get() -> str:
                 v = v.decode("utf8")
             except UnicodeDecodeError:
                 v = v.decode("utf_16_be")
+        elif k == "jfif_unit":
+            msg += f"\n{k}: " + {0: "none", 1: "inch", 2: "cm"}.get(v, str(v))
         # Image File Directories (IFD)
         elif k == "tag_v2":
             meta_dict = {TiffTags.TAGS_V2[k2]: v2 for k2, v2 in v}
@@ -733,22 +734,18 @@ def info_exif() -> str:
     exif = APP.im._getexif()  # type: ignore  # pylint: disable=protected-access
     if not exif:
         return ""
-    LOG.debug("Got exif dict: %s", exif)
-    LOG.debug("im.exif bytes: %s", APP.info["exif"].replace(b"\0", b""))
     encoding = "utf_16_be" if b"MM" in APP.info["exif"][:8] else "utf_16_le"
     LOG.debug("Encoding: %s", encoding)
-    s = f"EXIF: {encoding}"
+    s = f"EXIF: {encoding[-2:].upper()}"
     for key, val in exif.items():
-        print("EXIF TAG", key, ExifTags.TAGS.get(key, key))
         decoded_val = info_decode(val, encoding)
-        LOG.debug("decoded_val %s", decoded_val)
         if key not in ExifTags.TAGS:
             s += f"\nUnknown EXIF tag {key}: {val}"
             continue
         key_name = ExifTags.TAGS[key]
         s += f"\n{key_name}: "
         if key_name == "ColorSpace":
-            s += "Uncalibrated" if val == 65535 else val
+            s += "Uncalibrated" if val == 65535 else str(val)
         elif key_name == "ComponentsConfiguration":
             s += "Y, Cb, Cr, -" if val == b"\x01\x02\x03\x00" else str(val)
         elif key_name == "Orientation":
@@ -764,11 +761,11 @@ def info_exif() -> str:
                 "ROTATE_270",
             )[val]
         elif key_name == "ResolutionUnit":
-            s += {2: "inch", 3: "cm"}.get(val, val)
+            s += {2: "inch", 3: "cm"}.get(val, str(val))
         elif key_name == "YCbCrPositioning":
             s += {
                 1: "Centered",
-            }.get(val, val)
+            }.get(val, str(val))
         else:
             s += f"{decoded_val}"
 
@@ -788,12 +785,14 @@ def info_exiftool() -> str:
     """Uses exiftool on path."""
     s = ""
     try:
-        # with ExifToolHelper() as et:
-        #     for d in et.get_metadata(paths[path_index]):
-        #         for k, v in d.items():
-        #             s += f"\n{k}: {v}"
         output = subprocess.run(
-            ["exiftool", APP.paths[APP.i_path]],
+            [
+                "exiftool",
+                "-duplicates",
+                "-groupHeadings",
+                "-unknown",
+                APP.paths[APP.i_path],
+            ],
             capture_output=True,
             check=False,
             text=False,
@@ -1165,8 +1164,10 @@ def set_bg(event=None):
     CANVAS.config(bg=bg)
     CANVAS.itemconfig(CANVAS.im_bg, fill=bg)
     ERROR_OVERLAY.config(bg=bg)
-    MENU.config(bg=bg, fg=fg)
-    style.configure("TScrollbar", troughcolor=bg, background=bg)
+    MENU.config(
+        bg=bg, fg=fg, bd=0, relief="flat", tearoff=0, activeborderwidth=0
+    )  # Can't stop border on Windows!
+    style.configure("TScrollbar", troughcolor=bg, background="lightgrey")
     style.map("TScrollbar", background=[("pressed", "!disabled", fg), ("active", fg)])
     style.configure("TSizegrip", background=bg)
 
