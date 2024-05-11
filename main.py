@@ -1515,8 +1515,8 @@ BINDS = [
     (clipboard_copy, "Control-c Control-Insert"),
     (clipboard_paste, "Control-v Shift-Insert"),
     (set_verbosity, "v"),
-    (select, "B2-Motion"),
     (drag, "B1-Motion"),
+    (select, "B2-Motion"),
     (drag_begin, "ButtonPress"),
     (drag_end, "ButtonRelease"),
     (menu_show, "Button-3"),  # Or rather tk_popup in Ubuntu?
