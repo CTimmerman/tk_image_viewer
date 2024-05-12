@@ -14,7 +14,6 @@ import base64, enum, functools, gzip, logging, os, pathlib, random, re, subproce
 from io import BytesIO
 from tkinter import filedialog, messagebox, ttk
 
-# from exiftool import ExifToolHelper  # type: ignore  # Needs exiftool in path.
 import pillow_avif  # type: ignore  # noqa: F401  # pylint: disable=E0401
 import pillow_jxl  # noqa: F401
 import pyperclip  # type: ignore
@@ -836,7 +835,7 @@ def info_icc() -> str:
 Copyright: {ImageCms.getProfileCopyright(p).strip()}
 Description: {ImageCms.getProfileDescription(p).strip()}
 Intent: {('Perceptual', 'Relative colorimetric', 'Saturation', 'Absolute colorimetric')[intent]}
-isIntentSupported: {ImageCms.isIntentSupported(p, intent, 1)}"""
+isIntentSupported: {ImageCms.isIntentSupported(p, ImageCms.Intent(intent), ImageCms.Direction(1))}"""
         if man:
             s += f"\nManufacturer: {man}"
         if model:
@@ -950,7 +949,7 @@ def path_open(event=None):
 
 
 @log_this
-def path_save(event=None):
+def path_save(event=None, filename=None, newmode=None, noexif=False):
     """Save file as...."""
     if "Names" in APP.info:
         p = pathlib.Path(
@@ -959,21 +958,41 @@ def path_save(event=None):
     else:
         p = APP.paths[APP.i_path]
 
-    LOG.debug("Image info to be saved: %s", APP.im.info)
-    filename = filedialog.asksaveasfilename(
-        initialfile=p.absolute(),
-        defaultextension=p.suffix,
-        filetypes=APP.SUPPORTED_FILES_WRITE,
-    )
+    if not filename:
+        filename = filedialog.asksaveasfilename(
+            initialfile=p.absolute(),
+            defaultextension=p.suffix,
+            filetypes=APP.SUPPORTED_FILES_WRITE,
+            typevariable=p.suffix,
+        )
     if filename:
         LOG.info("Saving %s", filename)
+        im = APP.im.convert(newmode) if newmode else APP.im
+        save_all = hasattr(im, "n_frames") and im.n_frames > 1
+        fmt = filename.split(".")[-1].upper()
+        if fmt == "JPG":
+            fmt = "JPEG"
+        if save_all and fmt not in Image.SAVE_ALL:
+            answer = messagebox.showwarning(
+                "Lose Frames",
+                f"Can only store one frame in {fmt}. Ignore the rest?",
+                type=messagebox.YESNO,
+            )
+            if answer != "yes":
+                return
+            save_all = False
         try:
-            APP.im.save(
+            im_info = im.info.copy()
+            if noexif:
+                del im_info["exif"]
+            # print("XXX Saving", im_info)
+            im.save(
                 filename,
-                **APP.im.info,
+                fmt,
+                **im_info,
                 lossless=True,
                 optimize=True,
-                save_all=hasattr(APP.im, "n_frames"),  # All frames.
+                save_all=save_all,  # All frames.
             )
             paths_update()
             toast(f"Saved {filename}")
@@ -981,6 +1000,18 @@ def path_save(event=None):
             msg = f"Failed to save as {filename}. {ex}"
             LOG.error(msg)
             toast(msg, 4000, "red")
+            if (
+                str(ex) == "EXIF data is too long"  # From Pillow 9.5.0 (2023-04-01)
+                and messagebox.showwarning(
+                    "Lose EXIF", f"{ex}. Retry without it?", type=messagebox.YESNO
+                )
+                == "yes"
+            ):
+                path_save(filename=filename, newmode=newmode, noexif=True)
+                return
+            if str(ex) == "cannot write mode RGBA as JPEG":
+                path_save(filename=filename, newmode="RGB", noexif=noexif)
+                return
             raise
 
 
@@ -1180,7 +1211,7 @@ def set_bg(event=None):
     MENU.config(
         bg=bg, fg=fg, bd=0, relief="flat", tearoff=0, activeborderwidth=0
     )  # Can't stop border on Windows!
-    style.configure("TScrollbar", troughcolor=bg, background="lightgrey")
+    style.configure("TScrollbar", troughcolor=bg, background="darkgrey")
     style.map("TScrollbar", background=[("pressed", "!disabled", fg), ("active", fg)])
     style.configure("TSizegrip", background=bg)
 
