@@ -2,8 +2,7 @@ pillow
 pillow-avif-plugin
 pillow-heif
 pillow-jxl-plugin
-pyexiftool
-pygame
+pygame  # Render SVG
 pyperclip
-pyyaml
+pyyaml  # Format XMP
 tkinterdnd2
