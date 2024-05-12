@@ -962,8 +962,7 @@ def path_save(event=None, filename=None, newmode=None, noexif=False):
         filename = filedialog.asksaveasfilename(
             initialfile=p.absolute(),
             defaultextension=p.suffix,
-            filetypes=APP.SUPPORTED_FILES_WRITE,
-            typevariable=p.suffix,
+            filetypes=APP.SUPPORTED_FILES_WRITE
         )
     if filename:
         LOG.info("Saving %s", filename)
@@ -988,7 +987,7 @@ def path_save(event=None, filename=None, newmode=None, noexif=False):
             # print("XXX Saving", im_info)
             im.save(
                 filename,
-                fmt,
+                None,  # Let Pillow handle ".jfif" -> JPEG
                 **im_info,
                 lossless=True,
                 optimize=True,
