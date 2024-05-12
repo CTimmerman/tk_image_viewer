@@ -12,6 +12,8 @@ install
 
 Will take about 9.5 MB if the Python libs aren't already installed.
 
+To see more metadata, add the 11 MB [exiftool](https://exiftool.org/) folder path to your [PATH environment variable](https://www3.ntu.edu.sg/home/ehchua/programming/howto/Environment_Variables.html).
+
 ## Use
 
 ```pre
