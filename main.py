@@ -1,4 +1,3 @@
-# pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, too-many-boolean-expressions, too-many-branches, too-many-lines, too-many-locals, too-many-nested-blocks,too-many-statements, unused-argument, unused-import, wrong-import-position
 """Tk Image Viewer
 by Cees Timmerman
 2024-03-17 First version.
@@ -10,15 +9,16 @@ by Cees Timmerman
 2024-04-10 AVIF, JXL, SVG support.
 2024-04-25 Photoshop IRB, XMP, exiftool support.
 """
-import base64, enum, functools, gzip, logging, os, pathlib, random, re, subprocess, time, tkinter, zipfile  # noqa: E401
+
+# pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, too-many-boolean-expressions, too-many-branches, too-many-lines, too-many-locals, too-many-nested-blocks, too-many-statements, unused-argument, unused-import, wrong-import-position
+import base64, enum, functools, gzip, logging, os, pathlib, random, re, time, tkinter, zipfile  # noqa: E401
 from io import BytesIO
 from tkinter import filedialog, messagebox, ttk
 
 import pillow_avif  # type: ignore  # noqa: F401  # pylint: disable=E0401
 import pillow_jxl  # noqa: F401
 import pyperclip  # type: ignore
-import yaml
-from PIL import ExifTags, Image, ImageCms, ImageGrab, ImageTk, IptcImagePlugin, TiffTags
+from PIL import Image, ImageGrab, ImageTk
 from PIL.Image import Transpose
 from pillow_heif import register_heif_opener  # type: ignore
 from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
@@ -26,7 +26,7 @@ from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 import pygame  # noqa: E402
 
-from psd_info import psd_resource_ids  # noqa: E402
+from metadata import info_get
 
 
 class Fits(enum.IntEnum):
@@ -657,278 +657,23 @@ def im_show(im):
     ):
         APP.i_path_old = APP.i_path
         APP.i_zip_old = APP.i_zip
-        info_set(msg + info_get())
+        CANVAS.config(cursor="watch")  # Invisible on Windows 11?! XXX
+        info_set(msg + info_get(im, APP.info, APP.paths[APP.i_path]))
+        CANVAS.config(cursor="")
     scrollbars_set()
-
-
-def info_decode(b: bytes, encoding: str) -> str:
-    """Decodes a sequence of bytes, as stated by the method signature."""
-    if not isinstance(b, bytes):
-        return str(b)
-    LOG.debug("BYTES! %s", str(b[:40]))
-    if b.startswith(b"ASCII\0\0\0"):
-        return b[8:].decode("ascii")
-    if b.startswith(b"UNICODE\0"):
-        b = b[8:]
-        for enc in (
-            "utf-16-be",  # Works despite EXIF byte order being LE.
-            "utf-16-le",  # Turns utf-16-be text Chinese.
-            encoding,
-            "utf8",  # Leaves \0 of utf-16-be, which print() leaves out! XXX
-        ):
-            try:
-                LOG.debug("info_decode %s", enc)
-                return b.decode(enc)
-            except UnicodeDecodeError:
-                pass
-    return re.sub("[^\x20-\x7F]+", " ", b.decode("ansi"))
-
-
-def info_get() -> str:
-    """Get image info."""
-    msg = ""
-    for k, v in APP.info.items():
-        # jfif attribute is just hex version in decimal.
-        if k in (
-            "dpi",
-            "exif",
-            "icc_profile",
-            "jfif",
-            "Names",
-            "photoshop",
-            "transparency",
-            "XML:com.adobe.xmp",
-        ):
-            continue
-
-        if k == "comment":
-            try:
-                v = v.decode("utf8")
-            except UnicodeDecodeError:
-                v = v.decode("utf_16_be")
-        elif k == "jfif_unit":
-            v = {0: "none", 1: "inch", 2: "cm"}.get(v, v)
-        elif k == "jfif_version":
-            v = f"{v[0]}.0{v[1]}"
-        elif k == "loop":
-            v = {0: "infinite"}.get(v, v)
-        # Image File Directories (IFD)
-        elif k == "tag_v2":
-            v = {TiffTags.TAGS_V2[k2]: v2 for k2, v2 in v}
-            LOG.debug("tag_v2: %s", v)
-        # PNG parameters
-        msg += f"\n{k}: {v}"
-        # PNG transparency
-        # msg += f"\n{k}: {(str(v)[:80] + '...') if len(str(v)) > 80 else v}"
-    if not APP.im:
-        return msg.replace("\0", "\\0")
-
-    CANVAS.config(cursor="watch")  # Invisible on Windows 11?! XXX
-    msg += f"\nFormat: {APP.im.format}"
-    try:
-        msg += f"\nMIME type: {APP.im.get_format_mimetype()}"  # type: ignore
-    except AttributeError:
-        pass
-    try:
-        msg += f"\nBit Depth: {APP.im.bits}"
-    except AttributeError:
-        pass
-    pixels = APP.im.width * APP.im.height
-    msg += (
-        f"\nColor Type: {APP.im.mode}"
-        + f"\nColors: {len(APP.im.getcolors(pixels)):,}"
-        + f"\nPixels: {pixels:,}"
-    )
-    for fun in (info_exif, info_icc, info_iptc, info_xmp, info_psd, info_exiftool):
-        s = fun()
-        if s:
-            msg += "\n\n" + s
-
-    CANVAS.config(cursor="")
-    return msg.replace("\0", "\\0")
-
-
-def info_exif() -> str:
-    """Return Exchangeable Image File (EXIF) info."""
-    # Workaround from https://github.com/python-pillow/Pillow/issues/5863
-    if not hasattr(APP.im, "_getexif"):
-        return ""
-
-    exif = APP.im._getexif()  # type: ignore  # pylint: disable=protected-access
-    if not exif:
-        return ""
-    encoding = "utf_16_be" if b"MM" in APP.info["exif"][:8] else "utf_16_le"
-    LOG.debug("Encoding: %s", encoding)
-    s = f"EXIF: {encoding[-2:].upper()}"
-    for k, v in exif.items():
-        if k not in ExifTags.TAGS:
-            s += f"\nUnknown EXIF tag {k}: {v}"
-            continue
-        key_name = ExifTags.TAGS[k]
-        if key_name == "ColorSpace":
-            v = {1: "sRGB", 65535: "uncalibrated"}.get(v, v)
-        elif key_name == "ComponentsConfiguration":
-            try:
-                v = "".join(("-", "Y", "Cb", "Cr", "R", "G", "B")[B] for B in v)
-            except IndexError:
-                pass
-        elif key_name == "Orientation":
-            v = (
-                "",
-                "normal",
-                "flip left right",
-                "rotate 180",
-                "flip top bottom",
-                "transpose",
-                "rotate 90",
-                "transverse",
-                "rotate 270",
-            )[v]
-        elif key_name == "ResolutionUnit":
-            v = {2: "inch", 3: "cm"}.get(v, v)
-        elif key_name == "SceneCaptureType":
-            v = {0: "standard", 1: "landscape", 2: "portrait", 3: "night scene"}.get(
-                v, v
-            )
-        elif key_name == "YCbCrPositioning":
-            v = {
-                1: "centered",
-                2: "co-sited",
-            }.get(v, v)
-        else:
-            v = info_decode(v, encoding)
-
-        s += f"\n{key_name}: {v}"
-
-    # Image File Directory (IFD)
-    # exif = IMAGE.getexif()  # type: ignore
-    # for k in ExifTags.IFD:
-    #     try:
-    #         v = exif.get_ifd(k)
-    #         if v:
-    #             s += f"\nIFD tag {k}: {ExifTags.IFD(k).name}: {v}"
-    #     except KeyError:
-    #         log.debug("IFD not found. %s", k)
-    return s.strip()
-
-
-def info_exiftool() -> str:
-    """Uses exiftool on path."""
-    s = ""
-    try:
-        output = subprocess.run(
-            [
-                "exiftool",
-                "-duplicates",
-                "-groupHeadings",
-                "-unknown2",
-                APP.paths[APP.i_path],
-            ],
-            capture_output=True,
-            check=False,
-            text=False,
-        )  # text=False to avoid dead thread with uncatchable UnicodeDecodeError: 'charmap' codec can't decode byte 0x8f in position 1749: character maps to <undefined> like https://github.com/smarnach/pyexiftool/issues/20
-        # Output for D:\\art\\__original_drawn_by_pink_ocean__e48c8d8c99313c1f4a86f35f8795c44b.jpg is not utf8, shift-jis, euc_jp, ISO-2022-JP, utf-16-le, or utf-16-be! Not latin1 either but that decodes.
-        s += (
-            output.stdout
-            and output.stdout.decode("ansi", errors="replace").replace("\r", "")
-            or ""
-        ) + output.stderr.decode("ansi", errors="replace").replace("\r", "")
-    except FileNotFoundError:
-        LOG.debug("Exiftool not on PATH.")
-    except UnicodeDecodeError as ex:
-        # PyExifTool can't handle Parameters data of naughty test\00032-1238577453.png which Exiftool itself handles fine.
-        LOG.error("exiftool read fail: %s", ex)
-    return s.strip()
-
-
-def info_icc() -> str:
-    """Return the ICC color profile info."""
-    s = ""
-    icc = APP.im.info.get("icc_profile")  # type: ignore
-    if icc:
-        p = ImageCms.ImageCmsProfile(BytesIO(icc))
-        intent = ImageCms.getDefaultIntent(p)
-        man = ImageCms.getProfileManufacturer(p).strip()
-        model = ImageCms.getProfileModel(p).strip()
-        s += f"""ICC Profile:
-Copyright: {ImageCms.getProfileCopyright(p).strip()}
-Description: {ImageCms.getProfileDescription(p).strip()}
-Intent: {('Perceptual', 'Relative colorimetric', 'Saturation', 'Absolute colorimetric')[intent]}
-isIntentSupported: {ImageCms.isIntentSupported(p, ImageCms.Intent(intent), ImageCms.Direction(1))}"""
-        if man:
-            s += f"\nManufacturer: {man}"
-        if model:
-            s += f"\nModel: {model}"
-    return s.strip()
-
-
-def info_iptc() -> str:
-    """Return IPTC metadata."""
-    s = ""
-    iptc = IptcImagePlugin.getiptcinfo(APP.im)
-    if iptc:
-        s += "IPTC:"
-        for k, v in iptc.items():
-            s += "\nKey:{} Value:{}".format(k, repr(v))
-    return s.strip()
-
-
-def info_psd() -> str:
-    """Return PhotoShop Document info."""
-    if "photoshop" not in APP.info:
-        return ""
-    s = "Photoshop:\n"
-    for k, v in APP.info["photoshop"].items():
-        readable_v = re.sub(r"(\\x..){2,}", " ", str(v)).replace(r"\\0", "")
-        # readable_v = re.sub(
-        #     r"\\0", "", re.sub(r"(\\x..){2,}", " ", str(v))
-        # ).strip()
-        # for enc in ('utf-16-le', 'utf-16-be', 'utf8'):
-        #     try:
-        #         readable_v = v.decode(enc)
-        #         s += f"\nFROM ENCODING {enc}\n"
-        #         break
-        #     except:
-        #         pass
-        if not readable_v or re.match("b'\\s+'", readable_v):
-            # Often binary data like version numbers.
-            if len(v) < 5:
-                v = int.from_bytes(v, byteorder="big")
-            s += f"{psd_resource_ids.get(k, k)}: {(str(v)[:200] + '...') if len(str(v)) > 200 else v}\n"
-        else:
-            s += f"{psd_resource_ids.get(k, k)}: {readable_v[:200] + '...' if len(readable_v) > 200 else readable_v}\n"
-        if (
-            k == 1036
-        ):  # PS5 thumbnail, https://www.awaresystems.be/imaging/tiff/tifftags/docs/photoshopthumbnail.html
-            continue
-
-    return s.strip()
-
-
-def info_xmp() -> str:
-    """Return XMP metadata."""
-    s = ""
-    if hasattr(APP.im, "getxmp"):
-        xmp = APP.im.getxmp()  # type: ignore
-        if xmp:
-            s += "XMP:\n"
-            s += yaml.safe_dump(xmp)
-            # Ugly:
-            # import json
-            # s += json.dumps(xmp, indent=2, sort_keys=True)
-            # import toml
-            # s += toml.dumps(xmp)
-            # s += "\n\n" + str(xmp)
-    return s.strip()
 
 
 def info_toggle(event=None):
     """Toggle info overlay."""
     if not APP.show_info or CANVAS.itemcget(CANVAS.text, "text").startswith("C - Set"):
-        info_set(APP.title()[: -len(" - " + TITLE)] + info_get())
+        CANVAS.config(cursor="watch")
+        info_set(
+            APP.title()[: -len(" - " + TITLE)]
+            + info_get(APP.im, APP.info, APP.paths[APP.i_path])
+        )
         LOG.debug("Showing info:\n%s", CANVAS.itemcget(CANVAS.text, "text"))
         info_show()
+        CANVAS.config(cursor="")
     else:
         info_hide()
 
