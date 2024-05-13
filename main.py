@@ -721,7 +721,7 @@ def info_get() -> str:
         # PNG transparency
         # msg += f"\n{k}: {(str(v)[:80] + '...') if len(str(v)) > 80 else v}"
     if not APP.im:
-        return msg
+        return msg.replace("\0", "\\0")
 
     CANVAS.config(cursor="watch")  # Invisible on Windows 11?! XXX
     msg += f"\nFormat: {APP.im.format}"
@@ -745,7 +745,7 @@ def info_get() -> str:
             msg += "\n\n" + s
 
     CANVAS.config(cursor="")
-    return msg
+    return msg.replace("\0", "\\0")
 
 
 def info_exif() -> str:
