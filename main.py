@@ -729,7 +729,16 @@ def info_get() -> str:
         msg += f"\nMIME type: {APP.im.get_format_mimetype()}"  # type: ignore
     except AttributeError:
         pass
-
+    try:
+        msg += f"\nBit Depth: {APP.im.bits}"
+    except AttributeError:
+        pass
+    pixels = APP.im.width * APP.im.height
+    msg += (
+        f"\nColor Type: {APP.im.mode}"
+        + f"\nColors: {len(APP.im.getcolors(pixels)):,}"
+        + f"\nPixels: {pixels:,}"
+    )
     for fun in (info_exif, info_icc, info_iptc, info_xmp, info_psd, info_exiftool):
         s = fun()
         if s:
@@ -811,14 +820,17 @@ def info_exiftool() -> str:
             check=False,
             text=False,
         )  # text=False to avoid dead thread with uncatchable UnicodeDecodeError: 'charmap' codec can't decode byte 0x8f in position 1749: character maps to <undefined> like https://github.com/smarnach/pyexiftool/issues/20
+        # Output for D:\\art\\__original_drawn_by_pink_ocean__e48c8d8c99313c1f4a86f35f8795c44b.jpg is not utf8, shift-jis, euc_jp, ISO-2022-JP, utf-16-le, or utf-16-be! Not latin1 either but that decodes.
         s += (
-            output.stdout and output.stdout.decode("utf8").replace("\r", "") or ""
-        ) + output.stderr.decode("utf8").replace("\r", "")
-    except (
-        FileNotFoundError,  # Exiftool not on PATH.
-        UnicodeDecodeError,  # PyExifTool can't handle Parameters data of naughty test\00032-1238577453.png which Exiftool itself handles fine.
-    ) as ex:
-        LOG.debug("exiftool read fail: %s", ex)
+            output.stdout
+            and output.stdout.decode("ansi", errors="replace").replace("\r", "")
+            or ""
+        ) + output.stderr.decode("ansi", errors="replace").replace("\r", "")
+    except FileNotFoundError:
+        LOG.debug("Exiftool not on PATH.")
+    except UnicodeDecodeError as ex:
+        # PyExifTool can't handle Parameters data of naughty test\00032-1238577453.png which Exiftool itself handles fine.
+        LOG.error("exiftool read fail: %s", ex)
     return s.strip()
 
 
@@ -906,7 +918,7 @@ def info_xmp() -> str:
 def info_toggle(event=None):
     """Toggle info overlay."""
     if not APP.show_info or CANVAS.itemcget(CANVAS.text, "text").startswith("C - Set"):
-        info_set(APP.title() + info_get())
+        info_set(APP.title()[: -len(" - " + TITLE)] + info_get())
         LOG.debug("Showing info:\n%s", CANVAS.itemcget(CANVAS.text, "text"))
         info_show()
     else:
@@ -960,9 +972,9 @@ def path_save(event=None, filename=None, newmode=None, noexif=False):
 
     if not filename:
         filename = filedialog.asksaveasfilename(
-            initialfile=p.absolute(),
             defaultextension=p.suffix,
-            filetypes=APP.SUPPORTED_FILES_WRITE
+            filetypes=APP.SUPPORTED_FILES_WRITE,
+            initialfile=p.absolute(),
         )
     if filename:
         LOG.info("Saving %s", filename)
@@ -1088,10 +1100,12 @@ def resize_handler(event=None):
     new_size = APP.winfo_geometry().split("+", maxsplit=1)[0]
     if APP.s_geo == new_size:
         return
-    ERROR_OVERLAY.config(wraplength=event.width)
-    TOAST.config(wraplength=event.width)
-    CANVAS.itemconfig(CANVAS.text, width=event.width - 16)
-    CANVAS.coords(CANVAS.im_bg, 0, 0, event.width, event.height)
+    APP.w = APP.winfo_width()
+    APP.h = APP.winfo_height()
+    ERROR_OVERLAY.config(wraplength=APP.w)
+    TOAST.config(wraplength=APP.w)
+    CANVAS.itemconfig(CANVAS.text, width=APP.w - 16)
+    CANVAS.coords(CANVAS.im_bg, 0, 0, APP.w, APP.h)
     # Resize selection?
 
     bb = CANVAS.bbox(CANVAS.text)
@@ -1395,8 +1409,7 @@ def fullscreen_toggle(event=None):
             )
             LOG.debug("Restoring geometry: %s", new_geometry)
             APP.geometry(new_geometry)
-    # Keeps using display 1
-    # APP.attributes("-fullscreen", not APP.attributes("-fullscreen"))
+    resize_handler()
 
 
 def str2float(s: str) -> float:
@@ -1587,7 +1600,7 @@ def main(args):
 
     # Needs visible window so wait for mainloop.
     APP.after(10, paths_update, None, args.path)
-    APP.after(20, resize_handler, type("", (), {"width": APP_w, "height": APP_h}))
+    APP.after(20, resize_handler)
 
     if args.fullscreen:
         APP.after(100, fullscreen_toggle)
