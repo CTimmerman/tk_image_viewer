@@ -760,37 +760,45 @@ def info_exif() -> str:
     encoding = "utf_16_be" if b"MM" in APP.info["exif"][:8] else "utf_16_le"
     LOG.debug("Encoding: %s", encoding)
     s = f"EXIF: {encoding[-2:].upper()}"
-    for key, val in exif.items():
-        decoded_val = info_decode(val, encoding)
-        if key not in ExifTags.TAGS:
-            s += f"\nUnknown EXIF tag {key}: {val}"
+    for k, v in exif.items():
+        if k not in ExifTags.TAGS:
+            s += f"\nUnknown EXIF tag {k}: {v}"
             continue
-        key_name = ExifTags.TAGS[key]
-        s += f"\n{key_name}: "
+        key_name = ExifTags.TAGS[k]
         if key_name == "ColorSpace":
-            s += "Uncalibrated" if val == 65535 else str(val)
+            v = {1: "sRGB", 65535: "uncalibrated"}.get(v, v)
         elif key_name == "ComponentsConfiguration":
-            s += "Y, Cb, Cr, -" if val == b"\x01\x02\x03\x00" else str(val)
+            try:
+                v = "".join(("-", "Y", "Cb", "Cr", "R", "G", "B")[B] for B in v)
+            except IndexError:
+                pass
         elif key_name == "Orientation":
-            s += (
+            v = (
                 "",
-                "Normal",
-                "FLIP_LEFT_RIGHT",
-                "ROTATE_180",
-                "FLIP_TOP_BOTTOM",
-                "TRANSPOSE",
-                "ROTATE_90",
-                "TRANSVERSE",
-                "ROTATE_270",
-            )[val]
+                "normal",
+                "flip left right",
+                "rotate 180",
+                "flip top bottom",
+                "transpose",
+                "rotate 90",
+                "transverse",
+                "rotate 270",
+            )[v]
         elif key_name == "ResolutionUnit":
-            s += {2: "inch", 3: "cm"}.get(val, str(val))
+            v = {2: "inch", 3: "cm"}.get(v, v)
+        elif key_name == "SceneCaptureType":
+            v = {0: "standard", 1: "landscape", 2: "portrait", 3: "night scene"}.get(
+                v, v
+            )
         elif key_name == "YCbCrPositioning":
-            s += {
-                1: "Centered",
-            }.get(val, str(val))
+            v = {
+                1: "centered",
+                2: "co-sited",
+            }.get(v, v)
         else:
-            s += f"{decoded_val}"
+            v = info_decode(v, encoding)
+
+        s += f"\n{key_name}: {v}"
 
     # Image File Directory (IFD)
     # exif = IMAGE.getexif()  # type: ignore
