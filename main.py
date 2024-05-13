@@ -588,7 +588,7 @@ def im_resize(loop=False):
     if not (hasattr(APP, "im") and APP.im):
         return
 
-    im = APP.im.copy()
+    im = APP.im.copy()  # Loses im.format!
 
     if APP.fit:
         im = im_fit(APP.im)
@@ -658,7 +658,7 @@ def im_show(im):
         APP.i_path_old = APP.i_path
         APP.i_zip_old = APP.i_zip
         CANVAS.config(cursor="watch")  # Invisible on Windows 11?! XXX
-        info_set(msg + info_get(im, APP.info, APP.paths[APP.i_path]))
+        info_set(msg + info_get(APP.im, APP.info, APP.paths[APP.i_path]))
         CANVAS.config(cursor="")
     scrollbars_set()
 
