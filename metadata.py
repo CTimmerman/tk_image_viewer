@@ -2,7 +2,7 @@
 2024-05-13 Refactored by Cees Timmerman.
 """
 
-# pylint: disable=comparison-with-callable, line-too-long, multiple-imports
+# pylint: disable=comparison-with-callable, line-too-long, multiple-imports, too-many-branches
 import logging, re, subprocess
 from io import BytesIO
 
@@ -344,8 +344,8 @@ def info_iptc(im: Image.Image) -> str:
             elif k == (2, 0):
                 k = "Application Record Version"
                 v = int.from_bytes(v, "little")
-            elif k in IIM_NAMES:
-                k = IIM_NAMES[k]
+            else:
+                k = IIM_NAMES.get(k, k)
             s += f"\n{k}: {repr(v)}"
     return s.strip()
 
