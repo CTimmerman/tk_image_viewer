@@ -420,16 +420,22 @@ def load_mhtml(path):
         name = sorted(meta.strip().split("\n"))[0].split("/")[-1]
         APP.info["Names"].append(name)
         new_parts.append(data)
-    LOG.debug("%s", f"Getting part {APP.i_zip}/{len(new_parts)} of {len(parts)}.")
+    LOG.debug("%s", f"Getting image {1 + APP.i_zip}/{len(new_parts)} of {len(parts)} parts.")
     data = new_parts[APP.i_zip]
     try:
         im_file = BytesIO(base64.standard_b64decode(data.rstrip()))
         APP.im = Image.open(im_file)
-    except ValueError as ex:
-        LOG.error("Failed to split mhtml: %s", ex)
+    except (Image.UnidentifiedImageError, ValueError) as ex:
+        LOG.error("MHT %s", ex)
         LOG.error("DATA %r", data[:180])
         im_file.seek(0)
         LOG.error("DECODED %s", im_file.read()[:80])
+        # im_file.seek(0)
+        # https://github.com/fdintino/pillow-avif-plugin/issues/13
+        # with open(f"tiv_mhtml_image_{1 + APP.i_zip}_fail.avif", "wb") as f:
+        #     f.write(im_file.read())
+        ex.args = (f"Failed to load image {1 + APP.i_zip} of",)
+        raise ex
 
 
 def load_svg(fpath):
