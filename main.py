@@ -10,8 +10,8 @@ by Cees Timmerman
 2024-04-25 Photoshop IRB, XMP, exiftool support.
 """
 
-# pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, too-many-boolean-expressions, too-many-branches, too-many-lines, too-many-locals, too-many-nested-blocks, too-many-statements, unused-argument, unused-import, wrong-import-position
-import base64, enum, functools, gzip, logging, os, pathlib, random, re, time, tkinter, zipfile  # noqa: E401
+# pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, no-member, too-many-boolean-expressions, too-many-branches, too-many-lines, too-many-locals, too-many-nested-blocks, too-many-statements, unused-argument, unused-import, wrong-import-position
+import argparse, base64, enum, functools, gzip, logging, os, pathlib, random, re, time, tkinter, zipfile  # noqa: E401
 from io import BytesIO
 from tkinter import filedialog, messagebox, ttk
 
@@ -26,7 +26,7 @@ from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 import pygame  # noqa: E402
 
-from metadata import info_get
+from metadata import info_get  # noqa: E402
 
 
 class Fits(enum.IntEnum):
@@ -39,6 +39,8 @@ class Fits(enum.IntEnum):
 
 
 BG_COLORS = ["black", "gray10", "gray50", "white"]
+FOLDER = os.path.dirname(os.path.realpath(__file__))
+CONFIG_FILE = os.path.join(FOLDER, "state")
 FONT_SIZE = 14
 RESIZE_QUALITY = [
     Image.Resampling.NEAREST,
@@ -233,7 +235,24 @@ def close(event=None):
     if APP.overrideredirect():
         fullscreen_toggle()
     else:
+        config_save()
         APP.quit()
+
+
+def config_save():
+    """Save geometry like IrfanView."""
+    try:
+        with open(CONFIG_FILE, "w+", encoding="utf8") as fp:
+            s = fp.read()
+            if " -g" not in s:
+                s += " -g _"
+
+            s = re.sub(r" (-g|--geometry) ([^\s]+)", rf" \1 {APP.geometry()}", s)
+            LOG.debug("Saving state %s", s)
+            fp.seek(0)
+            fp.write(s)
+    except IOError as ex:
+        LOG.error(ex)
 
 
 @log_this
@@ -708,6 +727,31 @@ def info_hide():
     scrollbars_set()
 
 
+def menu_init():
+    """Creates the context menu."""
+    for fun, keys in BINDS:
+        if fun in (
+            browse_frame,
+            browse_percentage,
+            browse_mouse,
+            drag,
+            drag_begin,
+            drag_end,
+            menu_show,
+            resize_handler,
+            scroll,
+            select,
+            zoom,
+            zoom_text,
+        ):
+            continue
+        if re.match("[a-z]( |$)", keys):
+            lbl = f"{fun.__doc__[:-1].title()} ({keys[0].upper()})"
+            MENU.add_command(label=lbl, command=fun, underline=len(lbl) - 2)
+        else:
+            MENU.add_command(label=fun.__doc__[:-1].title(), command=fun)
+
+
 def menu_show(event):
     """Show menu."""
     MENU.post(event.x_root, event.y_root)
@@ -1014,14 +1058,14 @@ def set_stats(path):
     APP.info = {
         # "Path": pathlib.Path(path),
         "Size": f"{stats.st_size:,} B",
-        "Accessed": time.strftime(TIME_FORMAT, time.localtime(stats.st_atime)),
-        "Modified": time.strftime(TIME_FORMAT, time.localtime(stats.st_mtime)),
         "Created": time.strftime(
             TIME_FORMAT,
             time.localtime(
                 stats.st_birthtime if hasattr(stats, "st_birthtime") else stats.st_ctime
             ),
         ),
+        "Modified": time.strftime(TIME_FORMAT, time.localtime(stats.st_mtime)),
+        "Accessed": time.strftime(TIME_FORMAT, time.localtime(stats.st_atime)),
     }
 
 
@@ -1334,7 +1378,7 @@ BINDS = [
 ]
 
 
-def main(args):
+def main():
     """Main function."""
     APP.b_animate = True
     APP.b_lines = False
@@ -1349,73 +1393,6 @@ def main(args):
     APP.s_geo = ""
     APP.transpose_type = -1
     APP.update_interval = -4000
-    if args.verbose:
-        APP.verbosity = VERBOSITY_LEVELS[
-            min(len(VERBOSITY_LEVELS) - 1, 1 + args.verbose)
-        ]
-        set_verbosity()
-
-    LOG.debug("Args: %s", args)
-    APP.paths = []
-
-    set_supported_files()
-
-    APP.fit = args.resize or 0
-    APP.quality = RESIZE_QUALITY[args.quality]
-    APP.transpose_type = args.transpose
-
-    # Needs visible window so wait for mainloop.
-    APP.after(10, paths_update, None, args.path)
-    APP.after(20, resize_handler)
-
-    if args.fullscreen:
-        APP.after(100, fullscreen_toggle)
-
-    if args.geometry:
-        APP.geometry(args.geometry)
-
-    APP.sort = args.order if args.order else "natural"
-
-    if args.update:
-        APP.update_interval = args.update
-        APP.after(1000, refresh_loop)
-
-    if args.slideshow:
-        APP.slideshow_pause = args.slideshow
-        slideshow_toggle()
-    else:
-        APP.slideshow_pause = 4000
-
-    # Prepare context menu.
-    for fun, keys in BINDS:
-        if fun in (
-            browse_frame,
-            browse_percentage,
-            browse_mouse,
-            drag,
-            drag_begin,
-            drag_end,
-            menu_show,
-            resize_handler,
-            scroll,
-            select,
-            zoom,
-            zoom_text,
-        ):
-            continue
-        if re.match("[a-z]( |$)", keys):
-            lbl = f"{fun.__doc__[:-1].title()} ({keys[0].upper()})"
-            MENU.add_command(label=lbl, command=fun, underline=len(lbl) - 2)
-        else:
-            MENU.add_command(label=fun.__doc__[:-1].title(), command=fun)
-
-    bind()
-    set_bg()
-    APP.mainloop()
-
-
-if __name__ == "__main__":
-    import argparse
 
     parser = argparse.ArgumentParser(
         prog="tk_image_viewer",
@@ -1490,4 +1467,58 @@ if __name__ == "__main__":
         "-v", "--verbose", help="set log level", action="count", default=0
     )
 
-    main(parser.parse_args())
+    parsed_args = argparse.Namespace()
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf8") as fp:
+            parser.parse_args(fp.read().split(), parsed_args)
+    except IOError as ex:
+        LOG.error(ex)
+
+    args = parser.parse_args(namespace=parsed_args)
+
+    if args.verbose:
+        APP.verbosity = VERBOSITY_LEVELS[
+            min(len(VERBOSITY_LEVELS) - 1, 1 + args.verbose)
+        ]
+        set_verbosity()
+
+    LOG.debug("Args: %s", args)
+    APP.paths = []
+
+    set_supported_files()
+
+    APP.fit = args.resize or 0
+    APP.quality = RESIZE_QUALITY[args.quality]
+    APP.transpose_type = args.transpose
+
+    # Needs visible window so wait for mainloop.
+    APP.after(10, paths_update, None, args.path)
+    APP.after(20, resize_handler)
+
+    if args.fullscreen:
+        APP.after(100, fullscreen_toggle)
+
+    if args.geometry:
+        APP.geometry(args.geometry)
+
+    APP.sort = args.order if args.order else "natural"
+
+    if args.update:
+        APP.update_interval = args.update
+        APP.after(1000, refresh_loop)
+
+    if args.slideshow:
+        APP.slideshow_pause = args.slideshow
+        slideshow_toggle()
+    else:
+        APP.slideshow_pause = 4000
+
+    APP.protocol("WM_DELETE_WINDOW", close)
+    menu_init()
+    bind()
+    set_bg()
+    APP.mainloop()
+
+
+if __name__ == "__main__":
+    main()
