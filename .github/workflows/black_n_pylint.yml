@@ -1,4 +1,4 @@
-name: Pylint
+name: Black & Pylint
 
 on: [push]
 
@@ -19,7 +19,9 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install -r requirements-dev.txt
-        pre-commit install
-    - name: Running pre-commit
+    - name: Analysing the code with black
       run: |
-        pre-commit
+        python -m black --check .  
+    - name: Analysing the code with pylint
+      run: |
+        pylint $(git ls-files '*.py')
