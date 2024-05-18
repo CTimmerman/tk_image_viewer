@@ -194,7 +194,12 @@ def browse_frame(event=None):
 
 def clipboard_copy(event=None):
     """Copy info to clipboard."""
-    pyperclip.copy(CANVAS.itemcget(CANVAS.text, "text"))
+    if CANVAS.find_closest(0, 0) == (CANVAS.text_bg,):
+        LOG.debug("Copying overlay.")
+        pyperclip.copy(CANVAS.itemcget(CANVAS.text, "text"))
+    else:
+        LOG.debug("Copying title.")
+        pyperclip.copy(APP.title())
     toast("Copied info.")
 
 
@@ -420,7 +425,9 @@ def load_mhtml(path):
         name = sorted(meta.strip().split("\n"))[0].split("/")[-1]
         APP.info["Names"].append(name)
         new_parts.append(data)
-    LOG.debug("%s", f"Getting image {1 + APP.i_zip}/{len(new_parts)} of {len(parts)} parts.")
+    LOG.debug(
+        "%s", f"Getting image {1 + APP.i_zip}/{len(new_parts)} of {len(parts)} parts."
+    )
     data = new_parts[APP.i_zip]
     try:
         im_file = BytesIO(base64.standard_b64decode(data.rstrip()))
@@ -663,7 +670,7 @@ def im_show(im):
     ):
         APP.i_path_old = APP.i_path
         APP.i_zip_old = APP.i_zip
-        CANVAS.config(cursor="watch")  # Invisible on Windows 11?! XXX
+        CANVAS.config(cursor="watch")
         info_set(msg + info_get(APP.im, APP.info, APP.paths[APP.i_path]))
         CANVAS.config(cursor="")
     scrollbars_set()
