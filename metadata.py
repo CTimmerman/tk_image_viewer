@@ -3,7 +3,7 @@
 """
 
 # pylint: disable=comparison-with-callable, line-too-long, multiple-imports, too-many-branches
-import logging, re, subprocess
+import logging, re, subprocess  # noqa: E401
 from io import BytesIO
 
 import yaml
