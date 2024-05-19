@@ -5,6 +5,7 @@
 # pylint: disable=comparison-with-callable, line-too-long, multiple-imports, too-many-branches
 import logging, re, subprocess  # noqa: E401
 from io import BytesIO
+from typing import Literal, cast
 
 import yaml
 from PIL import ExifTags, Image, ImageCms, IptcImagePlugin, TiffTags
@@ -13,6 +14,8 @@ from PIL import ExifTags, Image, ImageCms, IptcImagePlugin, TiffTags
 logging.basicConfig(format="%(levelname)s: %(message)s")
 # Add a logging namespace.
 LOG = logging.getLogger(__name__)
+
+ByteOrderType = Literal["big", "little"]
 
 # From https://www.iptc.org/std/photometadata/specification/iptc-pmd-techreference_2023.2.json
 IIM_NAMES = {
@@ -38,6 +41,14 @@ IIM_NAMES = {
     (2, 5): "title",
 }
 
+EXIF_TAGS = {
+    **ExifTags.TAGS,
+    769: "Exif 0x0301",
+    771: "Rendering Intent",
+    20752: "Pixel Units",
+    20753: "Pixels Per Unit X",
+    20754: "Pixels Per Unit Y",
+}
 
 # From https://gist.github.com/ertaquo/b1d12c37a21268e3d095d39e196f5863
 PSD_RESOURCE_IDS = {
@@ -120,6 +131,13 @@ PSD_RESOURCE_IDS = {
     3000: "OriginPathInfo",
     10000: "PrintFlagsInfo",
 }
+
+RENDERING_INTENT = (
+    "Perceptual",
+    "Relative colorimetric",
+    "Saturation",
+    "Absolute colorimetric",
+)
 
 
 def info_decode(b: bytes, encoding: str) -> str:
@@ -220,14 +238,15 @@ def info_exif(im: Image.Image) -> str:
     exif = im._getexif()  # type: ignore  # pylint: disable=protected-access
     if not exif:
         return ""
-    encoding = "utf_16_be" if b"MM" in im.info["exif"][:8] else "utf_16_le"
-    LOG.debug("Encoding: %s", encoding)
-    s = f"EXIF: {encoding[-2:].upper()}"
+    byte_order = cast(
+        ByteOrderType, "big" if b"MM" in im.info["exif"][:8] else "little"
+    )
+    s = f"EXIF:\nByte order: {byte_order}-endian"
     for k, v in exif.items():
-        if k not in ExifTags.TAGS:
+        if k not in EXIF_TAGS:
             s += f"\nUnknown EXIF tag {k}: {v}"
             continue
-        key_name = ExifTags.TAGS[k]
+        key_name = EXIF_TAGS[k]
         if key_name == "ColorSpace":
             v = {1: "sRGB", 65535: "uncalibrated"}.get(v, v)
         elif key_name == "ComponentsConfiguration":
@@ -247,6 +266,8 @@ def info_exif(im: Image.Image) -> str:
                 "transverse",
                 "rotate 270",
             )[v]
+        elif k == 771:
+            v = RENDERING_INTENT[int.from_bytes(v, byteorder=byte_order)]
         elif key_name == "ResolutionUnit":
             v = {2: "inch", 3: "cm"}.get(v, v)
         elif key_name == "SceneCaptureType":
@@ -258,8 +279,10 @@ def info_exif(im: Image.Image) -> str:
                 1: "centered",
                 2: "co-sited",
             }.get(v, v)
+        elif isinstance(v, bytes) and len(v) < 5:
+            v = int.from_bytes(v, byteorder=byte_order)
         else:
-            v = info_decode(v, encoding)
+            v = info_decode(v, "utf_16_be" if byte_order == "big" else "utf_16_le")
 
         s += f"\n{key_name}: {v}"
 
@@ -317,7 +340,7 @@ def info_icc(im: Image.Image) -> str:
         s += f"""ICC Profile:
 Copyright: {ImageCms.getProfileCopyright(p).strip()}
 Description: {ImageCms.getProfileDescription(p).strip()}
-Intent: {('Perceptual', 'Relative colorimetric', 'Saturation', 'Absolute colorimetric')[intent]}
+Intent: {RENDERING_INTENT[intent]}
 isIntentSupported: {ImageCms.isIntentSupported(p, ImageCms.Intent(intent), ImageCms.Direction(1))}"""
         if man:
             s += f"\nManufacturer: {man}"
