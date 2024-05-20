@@ -308,6 +308,7 @@ def info_exiftool(path: str) -> str:
                 "-duplicates",
                 "-groupHeadings",
                 "-unknown2",
+                # "-charset", "filename=utf8",  # Breaks finding regular files on Windows 10 but doesn't matter for Hebrew names.
                 path,
             ],
             capture_output=True,
@@ -410,7 +411,11 @@ def info_xmp(im: Image.Image) -> str:
     """Return Extensible Metadata Platform (XMP) metadata."""
     s = ""
     if hasattr(im, "getxmp"):
-        xmp = im.getxmp()  # type: ignore
+        xmp = None
+        try:
+            xmp = im.getxmp()  # type: ignore
+        except ValueError:
+            pass
         if xmp:
             s += "XMP:\n"
             s += yaml.safe_dump(xmp)

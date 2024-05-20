@@ -17,13 +17,17 @@ To see more metadata, add the 11 MB [exiftool](https://exiftool.org/) folder pat
 ## Use
 
 ```pre
-usage: tk_image_viewer [-h] [-f] [-g WxH+X+Y] [-o ORDER] [-q N] [-r [N]] [-s [ms]] [-t N] [-u [ms]] [-v] [path]
+usage: tk_image_viewer [-h] [-b [ms]] [-f] [-g WxH+X+Y] [-o ORDER] [-q N] [-r [N]] [-t N] [-u [ms]] [-v] [path]
+
+An image viewer that supports both arrow keys and WebP with foreign characters in long paths.
 
 positional arguments:
   path
 
 options:
   -h, --help            show this help message and exit
+  -b [ms], --browse [ms]
+                        browse to next image every N ms (default 4000)
   -f, --fullscreen      run fullscreen
   -g WxH+X+Y, --geometry WxH+X+Y
                         set window geometry, eg -g +0+-999
@@ -31,8 +35,6 @@ options:
                         sort order. [NATURAL|string|random|mtime|ctime|size]
   -q N, --quality N     set antialiasing level (0-5, default 0)
   -r [N], --resize [N]  resize image to fit window (0-3: none, all, big, small. default 1)
-  -s [ms], --slideshow [ms]
-                        switch to next image every N ms (default 4000)
   -t N, --transpose N   transpose 0-6 flip_left_right, flip_top_bottom, rotate_90, rotate_180, rotate_270, transpose, transverse
   -u [ms], --update [ms]
                         update interval (default 4000)
@@ -42,12 +44,13 @@ options:
 Binds:
 
 ```pre
+A - Toggle animation.
+B Pause - Toggle slideshow.
 C - Set background color.
 F F11 Return - Toggle fullscreen.
 Escape - Close fullscreen or app.
 H F1 - Toggle help.
 I - Toggle info overlay.
-A - Toggle animation.
 Comma period - Browse animation frames.
 Ctrl+Left Ctrl+Right Ctrl+Up Ctrl+Down - Scroll.
 Ctrl+MouseWheel minus plus equal 0 - Zoom.
@@ -55,7 +58,6 @@ Q Shift+Q - Set resize quality.
 R - Resize type to fit window.
 T Shift+T - Transpose image.
 Alt+MouseWheel Alt+Minus Alt+Plus Alt+Equal - Zoom text.
-B Pause - Toggle slideshow.
 MouseWheel - Previous/Next.
 Right Down PageDown space Button-5 - Next.
 Left Up PageUp BackSpace Button-4 - Previous.

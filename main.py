@@ -1152,7 +1152,10 @@ def set_verbosity(event=None):
 def slideshow_run(event=None):
     """Run slideshow."""
     if APP.b_slideshow:
-        browse()
+        try:
+            browse(delta=1)
+        except (Image.UnidentifiedImageError, PermissionError):
+            pass
         APP.after(APP.slideshow_pause, slideshow_run)
 
 
@@ -1338,12 +1341,13 @@ ERROR_OVERLAY.place(x=0, y=0, relwidth=1, relheight=1)
 MENU = tkinter.Menu(APP, tearoff=0)
 
 BINDS = [
+    (animation_toggle, "a"),
+    (slideshow_toggle, "b Pause"),
     (set_bg, "c"),
     (fullscreen_toggle, "f F11 Return"),
     (close, "Escape"),
     (help_toggle, "h F1"),
     (info_toggle, "i"),
-    (animation_toggle, "a"),
     (browse_frame, "comma period"),
     (scroll, "Control-Left Control-Right Control-Up Control-Down"),
     (zoom, "Control-MouseWheel minus plus equal 0"),
@@ -1351,7 +1355,6 @@ BINDS = [
     (fit_handler, "r"),
     (transpose_set, "t T"),
     (zoom_text, "Alt-MouseWheel Alt-minus Alt-plus Alt-equal"),
-    (slideshow_toggle, "b Pause"),
     (browse_mouse, "MouseWheel"),
     (browse_next, "Right Down Next space Button-5"),
     (browse_prev, "Left Up Prior BackSpace Button-4"),
@@ -1401,6 +1404,15 @@ def main():
     )
     parser.add_argument("path", default=os.getcwd(), nargs="?")
     parser.add_argument(
+        "-b",
+        "--browse",
+        metavar="ms",
+        nargs="?",
+        help="browse to next image every N ms (default 4000)",
+        const=4000,
+        type=int,
+    )
+    parser.add_argument(
         "-f",
         "--fullscreen",
         action="store_true",
@@ -1436,15 +1448,6 @@ def main():
         help="resize image to fit window (0-3: none, all, big, small. default 1)",
         const=1,
         type=lambda s: int(s) if 0 <= int(s) <= 3 else 0,
-    )
-    parser.add_argument(
-        "-s",
-        "--slideshow",
-        metavar="ms",
-        nargs="?",
-        help="switch to next image every N ms (default 4000)",
-        const=4000,
-        type=int,
     )
     parser.add_argument(
         "-t",
@@ -1507,8 +1510,8 @@ def main():
         APP.update_interval = args.update
         APP.after(1000, refresh_loop)
 
-    if args.slideshow:
-        APP.slideshow_pause = args.slideshow
+    if args.browse:
+        APP.slideshow_pause = args.browse
         slideshow_toggle()
     else:
         APP.slideshow_pause = 4000
