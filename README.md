@@ -19,8 +19,6 @@ To see more metadata, add the 11 MB [exiftool](https://exiftool.org/) folder pat
 ```pre
 usage: tk_image_viewer [-h] [-b [ms]] [-f] [-g WxH+X+Y] [-o ORDER] [-q N] [-r [N]] [-t N] [-u [ms]] [-v] [path]
 
-An image viewer that supports both arrow keys and WebP with foreign characters in long paths.
-
 positional arguments:
   path
 
