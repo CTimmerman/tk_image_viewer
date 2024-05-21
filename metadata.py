@@ -409,20 +409,20 @@ def info_psd(im: Image.Image) -> str:
 
 def info_xmp(im: Image.Image) -> str:
     """Return Extensible Metadata Platform (XMP) metadata."""
-    s = ""
-    if hasattr(im, "getxmp"):
-        xmp = None
-        try:
-            xmp = im.getxmp()  # type: ignore
-        except ValueError:
-            pass
-        if xmp:
-            s += "XMP:\n"
-            s += yaml.safe_dump(xmp)
-            # Ugly:
-            # import json
-            # s += json.dumps(xmp, indent=2, sort_keys=True)
-            # import toml
-            # s += toml.dumps(xmp)
-            # s += "\n\n" + str(xmp)
+    if not hasattr(im, "getxmp"):
+        return ""
+    try:
+        xmp = im.getxmp()  # type: ignore
+        if not xmp:
+            return ""
+    except ValueError as ex:
+        return f"XMP: {ex}"
+    s = "XMP:\n"
+    s += yaml.safe_dump(xmp)
+    # Ugly:
+    # import json
+    # s += json.dumps(xmp, indent=2, sort_keys=True)
+    # import toml
+    # s += toml.dumps(xmp)
+    # s += "\n\n" + str(xmp)
     return s.strip()

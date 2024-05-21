@@ -444,6 +444,8 @@ def load_mhtml(path):
         name = sorted(meta.strip().split("\n"))[0].split("/")[-1]
         APP.info["Names"].append(name)
         new_parts.append(data)
+    if not new_parts:
+        raise ValueError(f"No image found in {path}")
     LOG.debug(
         "%s", f"Getting image {1 + APP.i_zip}/{len(new_parts)} of {len(parts)} parts."
     )
