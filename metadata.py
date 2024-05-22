@@ -279,7 +279,7 @@ def info_exif(im: Image.Image) -> str:
                 1: "centered",
                 2: "co-sited",
             }.get(v, v)
-        elif isinstance(v, bytes) and len(v) < 5:
+        elif isinstance(v, bytes) and len(v) < 3:
             v = int.from_bytes(v, byteorder=byte_order)
         else:
             v = info_decode(v, "utf_16_be" if byte_order == "big" else "utf_16_le")
@@ -394,7 +394,7 @@ def info_psd(im: Image.Image) -> str:
         #         pass
         if not readable_v or re.match("b'\\s+'", readable_v):
             # Often binary data like version numbers.
-            if len(v) < 5:
+            if len(v) < 3:
                 v = int.from_bytes(v, byteorder="big")
             s += f"{PSD_RESOURCE_IDS.get(k, k)}: {(str(v)[:200] + '...') if len(str(v)) > 200 else v}\n"
         else:
