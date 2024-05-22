@@ -125,7 +125,7 @@ def browse_mouse(event):
 
 def browse_percentage(event):
     """Shift+1-9 to go to 10 to 90 percent of the list."""
-    if hasattr(event, "state") and event.state == 1 and event.keycode in range(49, 58):
+    if hasattr(event, "state") and event.state & 1 and event.keycode in range(49, 58):
         ni = int(len(APP.paths) / 10 * (event.keycode - 48))
         browse(pos=ni)
 
@@ -145,7 +145,6 @@ def browse_random(event=None):
     browse(pos=random.randint(0, len(APP.paths) - 1))
 
 
-@log_this
 def browse(event=None, delta=0, pos=None):
     """Browse list of paths."""
     if pos is not None:
@@ -447,7 +446,8 @@ def load_mhtml(path):
     if not new_parts:
         raise ValueError(f"No image found in {path}")
     LOG.debug(
-        "%s", f"Getting image {1 + APP.i_zip}/{len(new_parts)} of {len(parts)} parts."
+        "%s",
+        f"Getting image {1 + APP.i_zip}/{len(new_parts)} of {len(parts)} parts: {APP.info['Names'][APP.i_zip]}",
     )
     data = new_parts[APP.i_zip]
     try:
@@ -548,12 +548,12 @@ def im_load(path=None):
         if hasattr(APP.im, "n_frames"):
             APP.info["Frames"] = APP.im.n_frames
         APP.info.update(**APP.im.info)
-        for k, v in APP.info.items():
-            LOG.debug(
-                "%s: %s",
-                k,
-                str(v)[:80] + "..." if len(str(v)) > 80 else v,
-            )
+        # for k, v in APP.info.items():
+        #     LOG.debug(
+        #         "%s: %s",
+        #         k,
+        #         str(v)[:80] + "..." if len(str(v)) > 80 else v,
+        #     )
         im_resize(APP.b_animate)
     # pylint: disable=W0718
     except (
