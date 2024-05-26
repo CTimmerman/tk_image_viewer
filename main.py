@@ -246,7 +246,14 @@ def config_save():
             if " -g" not in s:
                 s += " -g _"
 
-            s = re.sub(r" (-g|--geometry) ([^\s]+)", rf" \1 {APP.geometry()}", s)
+            if APP.state() == "zoomed":
+                if " -m" not in s:
+                    s += " -m"
+                g = APP.old_geometry
+            else:
+                s = s.replace(" -m", "")
+                g = APP.geometry()
+            s = re.sub(r" (-g|--geometry) ([^\s]+)", rf" \1 {g}", s)
             LOG.debug("Saving state %s", s)
             fp.seek(0)
             fp.write(s)
@@ -273,7 +280,6 @@ def delete_file(event=None):
         paths_update()
 
 
-@log_this
 def drag_begin(event):
     """Keep drag begin pos for delta move."""
     if event.widget != CANVAS:
@@ -283,7 +289,6 @@ def drag_begin(event):
     CANVAS.config(cursor="fleur" if event.num == 1 else "tcross")
 
 
-@log_this
 def drag_end(event):
     """End drag."""
     if event.widget != CANVAS:
@@ -543,7 +548,6 @@ def im_load(path=None):
                 load_mhtml(path)
             else:
                 APP.im = Image.open(path)
-        LOG.debug("Cached %s PIL_IMAGE", APP.im.size)
         APP.im_frame = 0
         if hasattr(APP.im, "n_frames"):
             APP.info["Frames"] = APP.im.n_frames
@@ -872,7 +876,6 @@ def paths_sort(path=None):
         error_show("Not found: %s" % ex)
 
 
-@log_this
 def paths_update(event=None, path=None):
     """Update path info."""
     if not path:
@@ -1056,7 +1059,6 @@ def set_order(event=None):
 def set_stats(path):
     """Set stats."""
     stats = os.stat(path)
-    LOG.debug("Stat: %s", stats)
     APP.info = {
         # "Path": pathlib.Path(path),
         "Size": f"{stats.st_size:,} B",
@@ -1204,7 +1206,6 @@ def fit_handler(event=None):
     im_resize()
 
 
-@log_this
 def fullscreen_toggle(event=None):
     """Toggle fullscreen."""
     if not APP.overrideredirect():
@@ -1281,8 +1282,8 @@ APP.dnd_bind("<<Drop>>", drop_handler)
 APP.show_info = False
 APP.title(TITLE)
 APP_w, APP_h = int(APP.winfo_screenwidth() * 0.75), int(APP.winfo_screenheight() * 0.75)
-geometry = f"{APP_w}x{APP_h}+{int(APP_w * 0.125)}+{int(APP_h * 0.125)}"
-APP.geometry(geometry)
+APP.old_geometry = f"{APP_w}x{APP_h}+{int(APP_w * 0.125)}+{int(APP_h * 0.125)}"
+APP.geometry(APP.old_geometry)
 
 TOAST = tkinter.Label(
     APP,
@@ -1427,6 +1428,7 @@ def main():
         help="set window geometry, eg -g +0+-999",
         type=str,
     )
+    parser.add_argument("-m", "--maximize", action="store_true", help="maximize window")
     parser.add_argument(
         "-o",
         "--order",
@@ -1494,6 +1496,7 @@ def main():
 
     APP.fit = args.resize or 0
     APP.quality = RESIZE_QUALITY[args.quality]
+    APP.sort = args.order if args.order else "natural"
     APP.transpose_type = args.transpose
 
     # Needs visible window so wait for mainloop.
@@ -1504,9 +1507,12 @@ def main():
         APP.after(100, fullscreen_toggle)
 
     if args.geometry:
-        APP.geometry(args.geometry)
+        APP.old_geometry = args.geometry
+        APP.geometry(APP.old_geometry)
+        APP.update()
 
-    APP.sort = args.order if args.order else "natural"
+    if args.maximize:
+        APP.state("zoomed")
 
     if args.update:
         APP.update_interval = args.update

@@ -17,7 +17,7 @@ To see more metadata, add the 11 MB [exiftool](https://exiftool.org/) folder pat
 ## Use
 
 ```pre
-usage: tk_image_viewer [-h] [-b [ms]] [-f] [-g WxH+X+Y] [-o ORDER] [-q N] [-r [N]] [-t N] [-u [ms]] [-v] [path]
+usage: tk_image_viewer [-h] [-b [ms]] [-f] [-g WxH+X+Y] [-m] [-o ORDER] [-q N] [-r [N]] [-t N] [-u [ms]] [-v] [path]
 
 positional arguments:
   path
@@ -29,6 +29,7 @@ options:
   -f, --fullscreen      run fullscreen
   -g WxH+X+Y, --geometry WxH+X+Y
                         set window geometry, eg -g +0+-999
+  -m, --maximize        maximize window
   -o ORDER, --order ORDER
                         sort order. [NATURAL|string|random|mtime|ctime|size]
   -q N, --quality N     set antialiasing level (0-5, default 0)
