@@ -101,7 +101,7 @@ def animation_toggle(event=None):
 
 def bind():
     """Binds input events to functions."""
-    APP.bind_all("<Key>", debug_keys)
+    # APP.bind_all("<Key>", debug_keys)
     for b in BINDS:
         func = b[0]
         for event in b[1].split(" "):
