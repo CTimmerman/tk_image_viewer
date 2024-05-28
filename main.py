@@ -13,7 +13,8 @@ by Cees Timmerman
 # pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, no-member, too-many-boolean-expressions, too-many-branches, too-many-lines, too-many-locals, too-many-nested-blocks, too-many-statements, unused-argument, unused-import, wrong-import-position
 import argparse, base64, enum, functools, gzip, logging, os, pathlib, random, re, time, tkinter, zipfile  # noqa: E401
 from io import BytesIO
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
+from typing import Optional
 
 import pillow_avif  # type: ignore  # noqa: F401  # pylint: disable=E0401
 import pillow_jxl  # noqa: F401
@@ -118,6 +119,22 @@ def browse_home(event=None):
     browse(pos=0)
 
 
+def browse_index(event):
+    """Go to index."""
+    bg = BG_COLORS[APP.i_bg]
+    fg = "black" if APP.i_bg == len(BG_COLORS) - 1 else "white"
+    APP.option_add("*Background", bg)
+    APP.option_add("*Foreground", fg)
+    i = simpledialog.askinteger("Index", "Where to?", parent=APP)
+    if not i:
+        return
+    # i = IntDialog("Index", "Where to?") - 1
+    # idi = IntDialog(APP)
+    # print("ID:", idi.result)
+    # i = 10
+    browse(pos=i - 1)
+
+
 def browse_mouse(event):
     """Previous/Next."""
     browse(delta=-1 if event.delta > 0 else 1)
@@ -145,7 +162,7 @@ def browse_random(event=None):
     browse(pos=random.randint(0, len(APP.paths) - 1))
 
 
-def browse(event=None, delta=0, pos=None):
+def browse(event=None, delta: int = 0, pos: Optional[int] = None):
     """Browse list of paths."""
     if pos is not None:
         new_index = pos
@@ -1354,6 +1371,7 @@ BINDS = [
     (browse_frame, "comma period"),
     (scroll, "Control-Left Control-Right Control-Up Control-Down"),
     (zoom, "Control-MouseWheel minus plus equal 0"),
+    (browse_index, "g"),
     (quality_set, "q Q"),
     (fit_handler, "r"),
     (transpose_set, "t T"),

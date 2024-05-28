@@ -53,6 +53,7 @@ I - Toggle info overlay.
 Comma period - Browse animation frames.
 Ctrl+Left Ctrl+Right Ctrl+Up Ctrl+Down - Scroll.
 Ctrl+MouseWheel minus plus equal 0 - Zoom.
+G - Go to index.
 Q Shift+Q - Set resize quality.
 R - Resize type to fit window.
 T Shift+T - Transpose image.
