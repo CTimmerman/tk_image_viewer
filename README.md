@@ -52,6 +52,7 @@ H F1 - Toggle help.
 I - Toggle info overlay.
 Comma period - Browse animation frames.
 Ctrl+Left Ctrl+Right Ctrl+Up Ctrl+Down - Scroll.
+Scroll_Lock - Toggle scroll lock.
 Ctrl+MouseWheel minus plus equal 0 - Zoom.
 G - Go to index.
 Q Shift+Q - Set resize quality.

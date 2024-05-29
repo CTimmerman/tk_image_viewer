@@ -964,6 +964,12 @@ def scroll(event):
         CANVAS.yview_scroll(1, "units")
 
 
+@log_this
+def scroll_toggle(event):
+    """Toggle scroll lock."""
+    APP.scroll_locked = event.state & 32
+
+
 def scrollbars_set():
     """Hide/show scrollbars."""
     win_h = APP.winfo_height()
@@ -1032,7 +1038,8 @@ def scrollbars_set():
 
         scrollregion = (min(x, 0), min(y, 0), x + can_w, y + can_h)
         CANVAS.config(scrollregion=scrollregion)
-        if APP.i_path != APP.i_scroll:
+        if not APP.scroll_locked and APP.i_path != APP.i_scroll:
+            # Scroll to top for comics.
             CANVAS.xview_moveto(0)
             CANVAS.yview_moveto(0)
             APP.i_scroll = APP.i_path
@@ -1368,6 +1375,7 @@ BINDS = [
     (info_toggle, "i"),
     (browse_frame, "comma period"),
     (scroll, "Control-Left Control-Right Control-Up Control-Down"),
+    (scroll_toggle, "Scroll_Lock"),
     (zoom, "Control-MouseWheel minus plus equal 0"),
     (browse_index, "g"),
     (quality_set, "q Q"),
@@ -1413,6 +1421,7 @@ def main():
     APP.info = {}
     APP.f_text_scale = 1.0
     APP.s_geo = ""
+    APP.scroll_locked = True
     APP.transpose_type = -1
     APP.update_interval = -4000
 
