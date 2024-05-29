@@ -220,7 +220,7 @@ def info_get(im: Image.Image, info: dict, path: str = "") -> str:
     colors = len(im.getcolors(pixels))
     msg += (
         f"\nColor Type: {im.mode}"
-        + f"\nColors: {colors:,} ({len(bin(colors))-2}-bit)"
+        + f"\nColors: {colors:,} ({len(bin(colors-1))-2}-bit)"
         + f"\nPixels: {pixels:,}"
     )
     for fun in (info_exif, info_icc, info_iptc, info_xmp, info_psd, info_exiftool):
