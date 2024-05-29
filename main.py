@@ -130,10 +130,6 @@ def browse_index(event):
     )
     if not i:
         return
-    # i = IntDialog("Index", "Where to?") - 1
-    # idi = IntDialog(APP)
-    # print("ID:", idi.result)
-    # i = 10
     browse(pos=i - 1)
 
 
