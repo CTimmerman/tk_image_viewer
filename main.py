@@ -383,7 +383,7 @@ def error_show(msg: str):
 
 def help_toggle(event=None):
     """Toggle help."""
-    if APP.show_info and CANVAS.itemcget(CANVAS.text, "text").startswith("A -"):
+    if APP.show_info and CANVAS.itemcget(CANVAS.text, "text")[2] == "-":
         info_hide()
     else:
         lines = []
@@ -718,7 +718,7 @@ def im_show(im):
 
 def info_toggle(event=None):
     """Toggle info overlay."""
-    if not APP.show_info or CANVAS.itemcget(CANVAS.text, "text").startswith("A -"):
+    if not APP.show_info or CANVAS.itemcget(CANVAS.text, "text")[2] == "-":
         CANVAS.config(cursor="watch")
         info_set(
             APP.title()[: -len(" - " + TITLE)]
