@@ -125,7 +125,9 @@ def browse_index(event):
     fg = "black" if APP.i_bg == len(BG_COLORS) - 1 else "white"
     APP.option_add("*Background", bg)
     APP.option_add("*Foreground", fg)
-    i = simpledialog.askinteger("Index", "Where to?", parent=APP)
+    i = simpledialog.askinteger(
+        "Index", "Where to?", initialvalue=APP.i_path + 1, parent=APP
+    )
     if not i:
         return
     # i = IntDialog("Index", "Where to?") - 1
