@@ -212,13 +212,15 @@ def info_get(im: Image.Image, info: dict, path: str = "") -> str:
     except AttributeError:
         pass
     try:
+        # Only JPEG.
         msg += f"\nBit Depth: {im.bits}"  # type: ignore
     except AttributeError:
         pass
     pixels = im.width * im.height
+    colors = len(im.getcolors(pixels))
     msg += (
         f"\nColor Type: {im.mode}"
-        + f"\nColors: {len(im.getcolors(pixels)):,}"
+        + f"\nColors: {colors:,} ({len(bin(colors))-2}-bit)"
         + f"\nPixels: {pixels:,}"
     )
     for fun in (info_exif, info_icc, info_iptc, info_xmp, info_psd, info_exiftool):
