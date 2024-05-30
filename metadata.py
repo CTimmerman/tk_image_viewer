@@ -48,6 +48,7 @@ EXIF_TAGS = {
     20752: "Pixel Units",
     20753: "Pixels Per Unit X",
     20754: "Pixels Per Unit Y",
+    59932: "Padding",
 }
 
 # From https://gist.github.com/ertaquo/b1d12c37a21268e3d095d39e196f5863
@@ -144,7 +145,7 @@ def info_decode(b: bytes, encoding: str) -> str:
     """Decodes a sequence of bytes, as stated by the method signature."""
     if not isinstance(b, bytes):
         return str(b)
-    LOG.debug("BYTES! %s", str(b[:40]))
+    note = f"({len(b)} bytes) "
     if b.startswith(b"ASCII\0\0\0"):
         return b[8:].decode("ascii")
     if b.startswith(b"UNICODE\0"):
@@ -160,7 +161,10 @@ def info_decode(b: bytes, encoding: str) -> str:
                 return b.decode(enc)
             except UnicodeDecodeError:
                 pass
-    return re.sub("[^\x20-\x7F]+", " ", b.decode("ansi"))
+    s = re.sub("[^\x20-\x7F]+", " ", b.decode("ansi"))
+    if not s:
+        s = str(b[:40])
+    return (note if len(b) > 10 else "") + s
 
 
 def info_get(im: Image.Image, info: dict, path: str = "") -> str:
