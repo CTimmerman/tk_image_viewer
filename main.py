@@ -111,7 +111,7 @@ def bind():
 
 def browse_end(event=None):
     """Last."""
-    browse(pos=APP.i_path - 1)
+    browse(pos=-1)
 
 
 def browse_home(event=None):
@@ -685,7 +685,6 @@ def im_show(im):
         except TypeError as ex:
             LOG.error(ex)
 
-        # canvas.move(canvas.image_ref, 10, 0)
         ERROR_OVERLAY.lower()
     except MemoryError as ex:
         LOG.error("Out of memory. Scaling down. %s", ex)
