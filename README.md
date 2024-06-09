@@ -2,7 +2,9 @@
 
 An image viewer that supports arrow keys, HEIC, WebP, foreign characters, long paths, and zip. Unlike IrfanView 64 4.54, JPEGView 1.0.37, and SumatraPDF v3.5.2 64-bit.
 
-On my Windows 11 it reads APNG, AVIF, AVIFS, BLP, BMP, BUFR, BW, CUR, DCX, DDS, DIB, EMF, EML, EPS, FIT, FITS, FLC, FLI, FTC, FTU, GBR, GIF, GRIB, H5, HDF, HEIC, HEICS, HEIF, HEIFS, HIF, ICB, ICNS, ICO, IIM, IM, J2C, J2K, JFIF, JP2, JPC, JPE, JPEG, JPF, JPG, JPX, JXL, MHT, MHTML, MPEG, MPG, MSP, PBM, PCD, PCX, PFM, PGM, PNG, PNM, PPM, PS, PSD, PXR, QOI, RAS, RGB, RGBA, SGI, SVG, SVGZ, TGA, TIF, TIFF, VDA, VST, WEBP, WMF, XBM, XPM, and ZIP, and writes APNG, AVIF, AVIFS, BLP, BMP, BUFR, BW, DDS, DIB, EMF, EPS, GIF, GRIB, H5, HDF, HEIC, HEICS, HEIF, HEIFS, HIF, ICB, ICNS, ICO, IM, J2C, J2K, JFIF, JP2, JPC, JPE, JPEG, JPF, JPG, JPX, JXL, MPO, MSP, PALM, PBM, PCX, PDF, PFM, PGM, PNG, PNM, PPM, PS, RGB, RGBA, SGI, TGA, TIF, TIFF, VDA, VST, WEBP, WMF, and XBM.
+On my Windows 11 it reads: APNG, AVIF, AVIFS, BLP, BMP, BUFR, BW, CUR, DCX, DDS, DIB, EMF, EML, EPS, FIT, FITS, FLC, FLI, FTC, FTU, GBR, GIF, GRIB, H5, HDF, HEIC, HEICS, HEIF, HEIFS, HIF, ICB, ICNS, ICO, IIM, IM, J2C, J2K, JFIF, JP2, JPC, JPE, JPEG, JPF, JPG, JPX, JXL, MHT, MHTML, MPEG, MPG, MSP, PBM, PCD, PCX, PFM, PGM, PNG, PNM, PPM, PS, PSD, PXR, QOI, RAS, RGB, RGBA, SGI, SVG, SVGZ, TGA, TIF, TIFF, VDA, VST, WEBP, WMF, XBM, XPM, and ZIP
+
+And writes: APNG, AVIF, AVIFS, BLP, BMP, BUFR, BW, DDS, DIB, EMF, EPS, GIF, GRIB, H5, HDF, HEIC, HEICS, HEIF, HEIFS, HIF, ICB, ICNS, ICO, IM, J2C, J2K, JFIF, JP2, JPC, JPE, JPEG, JPF, JPG, JPX, JXL, MPO, MSP, PALM, PBM, PCX, PDF, PFM, PGM, PNG, PNM, PPM, PS, RGB, RGBA, SGI, TGA, TIF, TIFF, VDA, VST, WEBP, WMF, and XBM.
 
 ## Install
 
@@ -53,23 +55,24 @@ I - Toggle info overlay.
 Comma period - Browse animation frames.
 Ctrl+Left Ctrl+Right Ctrl+Up Ctrl+Down - Scroll.
 Scroll_Lock - Toggle scroll lock.
-Ctrl+MouseWheel minus plus equal 0 - Zoom.
-G - Go to index.
+Ctrl+Wheel minus plus equal 0 - Zoom.
 Q Shift+Q - Set resize quality.
 R - Resize type to fit window.
 T Shift+T - Transpose image.
-Alt+MouseWheel Alt+Minus Alt+Plus Alt+Equal - Zoom text.
-MouseWheel - Previous/Next.
-Right Down PageDown space Button-5 - Next.
-Left Up PageUp BackSpace Button-4 - Previous.
+Alt+Wheel Alt+Minus Alt+Plus Alt+Equal - Zoom text.
+Wheel - Previous/Next.
+Right Down PageDown space B5 - Next.
+Left Up PageUp BackSpace B4 - Previous.
 End - Last.
-Key-1 Home - First.
-Key - Shift+1-9 to go to 10 to 90 percent of the list.
+1 Home - First.
+F3 - Go to next filename matching string.
+G F4 - Go to index.
+Shift+1-9 - Go to 10 to 90 percent of the list.
 X - Go to random index.
 O - Set order.
 D Delete - Delete file. Bypasses Trash.
-P - Pick a file to open.
-S - Save file as.
+P F2 - Pick a file to open.
+S F12 - Save file as.
 U F5 - Update path info.
 Shift+U - Toggle autoupdate.
 Ctrl+C Ctrl+Insert - Copy info to clipboard.
@@ -77,6 +80,6 @@ Ctrl+V Shift+Insert - Paste image from clipboard.
 V - Set verbosity.
 B1-Motion - Drag image.
 B2-Motion - Select area.
-Button-3 - Show menu.
+B3 F10 - Show menu.
 L - Toggle line overlay.
 ```

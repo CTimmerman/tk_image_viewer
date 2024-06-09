@@ -121,10 +121,6 @@ def browse_home(event=None):
 
 def browse_index(event):
     """Go to index."""
-    bg = BG_COLORS[APP.i_bg]
-    fg = "black" if APP.i_bg == len(BG_COLORS) - 1 else "white"
-    APP.option_add("*Background", bg)
-    APP.option_add("*Foreground", fg)
     i = simpledialog.askinteger(
         "Index", "Where to?", initialvalue=APP.i_path + 1, parent=APP
     )
@@ -133,13 +129,31 @@ def browse_index(event):
     browse(pos=i - 1)
 
 
+def browse_search(event):
+    """Go to next filename matching string."""
+    s = simpledialog.askstring(
+        "File name", "Search for?", initialvalue=APP.paths[APP.i_path], parent=APP
+    )
+    if not s:
+        return
+    i = APP.i_path
+    start = i
+    n = len(APP.paths)
+    while True:
+        i = (i + 1) % n
+        if s in str(APP.paths[i]) or i == start:
+            break
+
+    browse(pos=i)
+
+
 def browse_mouse(event):
     """Previous/Next."""
     browse(delta=-1 if event.delta > 0 else 1)
 
 
 def browse_percentage(event):
-    """Shift+1-9 to go to 10 to 90 percent of the list."""
+    """Shift+1-9 - Go to 10 to 90 percent of the list."""
     if hasattr(event, "state") and event.state & 1 and event.keycode in range(49, 58):
         ni = int(len(APP.paths) / 10 * (event.keycode - 48))
         browse(pos=ni)
@@ -213,10 +227,15 @@ def clipboard_copy(event=None):
     if CANVAS.find_closest(0, 0) == (CANVAS.text_bg,):
         LOG.debug("Copying overlay.")
         pyperclip.copy(CANVAS.itemcget(CANVAS.text, "text"))
-    else:
+        toast("Copied info.")
+    elif isinstance(APP.winfo_children()[-1], tkinter.Label):
         LOG.debug("Copying title.")
         pyperclip.copy(APP.title())
-    toast("Copied info.")
+        toast("Copied title.")
+    else:
+        LOG.debug("Copying path.")
+        pyperclip.copy(str(APP.paths[APP.i_path].absolute()))
+        toast("Copied path.")
 
 
 def clipboard_paste(event=None):
@@ -377,13 +396,12 @@ def error_show(msg: str):
     LOG.error(msg)
     ERROR_OVERLAY.config(text=msg)
     ERROR_OVERLAY.lift()
-    info_set(msg)  # To copy.
     APP.i_path_old = -1  # To refresh image info.
 
 
 def help_toggle(event=None):
     """Toggle help."""
-    if APP.show_info and CANVAS.itemcget(CANVAS.text, "text")[2] == "-":
+    if APP.showing == "help":
         info_hide()
     else:
         lines = []
@@ -391,32 +409,41 @@ def help_toggle(event=None):
             if fun in (drag_begin, drag_end, resize_handler):
                 continue
             lines.append(
-                re.sub(
-                    "((^|[+])[a-z])",
-                    lambda m: m.group(1).upper(),
-                    re.sub(
-                        "([QTU])\\b",
-                        "Shift+\\1",
-                        keys.replace("Control-", "Ctrl+")
-                        .replace("Alt-", "Alt+")
-                        .replace("Shift-", "Shift+")
-                        .replace(" Prior ", " PageUp ")
-                        .replace(" Next ", " PageDown "),
-                    ),
-                    0,
-                    re.MULTILINE,
+                (
+                    ""
+                    if " - " in fun.__doc__
+                    else re.sub(
+                        "((^|[+])[a-z])",
+                        lambda m: m.group(1).upper(),
+                        re.sub(
+                            "([QTU])\\b",
+                            "Shift+\\1",
+                            keys.replace("Key-", "")
+                            .replace("Button-", "B")
+                            .replace("Mouse", "")
+                            .replace("Control-", "Ctrl+")
+                            .replace("Alt-", "Alt+")
+                            .replace("Shift-", "Shift+")
+                            .replace(" Prior ", " PageUp ")
+                            .replace(" Next ", " PageDown "),
+                        ),
+                        0,
+                        re.MULTILINE,
+                    )
+                    + " - "
                 )
-                + " - "
                 + fun.__doc__.replace("...", "")
             )
         msg = "\n".join(lines)
         info_set(msg)
+        APP.showing = "help"
         info_show()
         LOG.debug(msg)
 
 
 def info_set(msg: str):
     """Change info text."""
+    APP.showing = msg
     CANVAS.itemconfig(CANVAS.text, text=msg)  # type: ignore
     info_bg_update()
 
@@ -701,7 +728,7 @@ def im_show(im):
         f" @ {'%sx%s' % im.size} {APP.paths[APP.i_path]}"
     )
     APP.title(msg + " - " + TITLE)
-    if APP.show_info and (
+    if APP.showing not in ("", "help") and (
         not hasattr(APP, "i_path_old")
         or APP.i_path != APP.i_path_old
         or not hasattr(APP, "i_path_old")
@@ -717,7 +744,7 @@ def im_show(im):
 
 def info_toggle(event=None):
     """Toggle info overlay."""
-    if not APP.show_info or CANVAS.itemcget(CANVAS.text, "text")[2] == "-":
+    if APP.showing in ("", "help"):
         CANVAS.config(cursor="watch")
         info_set(
             APP.title()[: -len(" - " + TITLE)]
@@ -732,7 +759,6 @@ def info_toggle(event=None):
 
 def info_show():
     """Show info overlay."""
-    APP.show_info = True
     CANVAS.lift(CANVAS.text_bg)
     CANVAS.lift(CANVAS.text)
     scrollbars_set()
@@ -740,7 +766,7 @@ def info_show():
 
 def info_hide():
     """Hide info overlay."""
-    APP.show_info = False
+    info_set("")
     CANVAS.lower(CANVAS.text_bg)
     CANVAS.lower(CANVAS.text)
     scrollbars_set()
@@ -883,7 +909,6 @@ def paths_sort(path=None):
             APP.paths.sort()
 
     try:
-        APP.i_path = APP.paths.index(pathlib.Path(path))
         im_load()
     except ValueError as ex:
         error_show("Not found: %s" % ex)
@@ -1062,6 +1087,9 @@ def set_bg(event=None):
     style.configure("TScrollbar", troughcolor=bg, background="darkgrey")
     style.map("TScrollbar", background=[("pressed", "!disabled", fg), ("active", fg)])
     style.configure("TSizegrip", background=bg)
+    # Dialogs
+    APP.option_add("*Background", bg)
+    APP.option_add("*Foreground", fg)
 
 
 @log_this
@@ -1299,7 +1327,7 @@ def zoom_text(event):
 APP = TkinterDnD.Tk()  # notice - use this instead of tk.Tk()
 APP.drop_target_register(DND_FILES)
 APP.dnd_bind("<<Drop>>", drop_handler)
-APP.show_info = False
+APP.showing = ""
 APP.title(TITLE)
 APP_w, APP_h = int(APP.winfo_screenwidth() * 0.75), int(APP.winfo_screenheight() * 0.75)
 APP.old_geometry = f"{APP_w}x{APP_h}+{int(APP_w * 0.125)}+{int(APP_h * 0.125)}"
@@ -1375,7 +1403,6 @@ BINDS = [
     (scroll, "Control-Left Control-Right Control-Up Control-Down"),
     (scroll_toggle, "Scroll_Lock"),
     (zoom, "Control-MouseWheel minus plus equal 0"),
-    (browse_index, "g"),
     (quality_set, "q Q"),
     (fit_handler, "r"),
     (transpose_set, "t T"),
@@ -1385,12 +1412,14 @@ BINDS = [
     (browse_prev, "Left Up Prior BackSpace Button-4"),
     (browse_end, "End"),
     (browse_home, "Key-1 Home"),
+    (browse_search, "F3"),
+    (browse_index, "g F4"),
     (browse_percentage, "Key"),
     (browse_random, "x"),
     (set_order, "o"),
     (delete_file, "d Delete"),
-    (path_open, "p"),
-    (path_save, "s"),
+    (path_open, "p F2"),
+    (path_save, "s F12"),
     (paths_update, "u F5"),
     (refresh_toggle, "U"),
     (clipboard_copy, "Control-c Control-Insert"),
@@ -1400,7 +1429,7 @@ BINDS = [
     (select, "B2-Motion"),
     (drag_begin, "ButtonPress"),
     (drag_end, "ButtonRelease"),
-    (menu_show, "Button-3"),  # Or rather tk_popup in Ubuntu?
+    (menu_show, "Button-3 F10"),  # Or rather tk_popup in Ubuntu?
     (lines_toggle, "l"),
     (resize_handler, "Configure"),
 ]
