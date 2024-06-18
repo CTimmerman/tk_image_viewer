@@ -19,7 +19,7 @@ To see more metadata, add the 11 MB [exiftool](https://exiftool.org/) folder pat
 ## Use
 
 ```pre
-usage: tk_image_viewer [-h] [-b [ms]] [-f] [-g WxH+X+Y] [-m] [-o ORDER] [-q N] [-r [N]] [-t N] [-u [ms]] [-v] [path]
+usage: tk_image_viewer [-h] [-b [ms]] [-f] [-g WxH+X+Y] [-m] [-o ORDER] [-q N] [-r [N]] [-t N] [-u [ms]] [-v] [-z] [path]
 
 positional arguments:
   path
@@ -40,6 +40,7 @@ options:
   -u [ms], --update [ms]
                         update interval (default 4000)
   -v, --verbose         set log level
+  -z, --archives        browse archives
 ```
 
 Binds:
@@ -69,6 +70,7 @@ F3 - Go to next filename matching string.
 G F4 - Go to index.
 Shift+1-9 - Go to 10 to 90 percent of the list.
 X - Go to random index.
+Z - Toggle browsing archives.
 O - Set order.
 D Delete - Delete file. Bypasses Trash.
 P F2 - Pick a file to open.
