@@ -884,15 +884,11 @@ def path_save(event=None, filename=None, newmode=None, noexif=False):
 def paths_sort(path=None):
     """Sort paths."""
     LOG.debug("Sorting %s", APP.sort)
-    if path:
-        try:
-            APP.i_path = APP.paths.index(pathlib.Path(path))
-        except ValueError:
-            pass
-    elif APP.paths:
-        path = APP.paths[APP.i_path]
-    else:
+    if not APP.paths:
+        LOG.error("No paths to sort.")
         return
+    if not path:
+        path = APP.paths[APP.i_path]
 
     for s in APP.sort.split(","):
         if s == "natural":
@@ -907,6 +903,11 @@ def paths_sort(path=None):
             APP.paths.sort(key=os.path.getsize)
         elif s == "string":
             APP.paths.sort()
+
+    try:
+        APP.i_path = APP.paths.index(pathlib.Path(path))
+    except ValueError:
+        pass
 
     try:
         im_load()
