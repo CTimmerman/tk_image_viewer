@@ -109,82 +109,18 @@ def bind():
             APP.bind(f"<{event}>", func)
 
 
-def browse_end(event=None):
-    """Last."""
-    browse(pos=-1)
-
-
-def browse_home(event=None):
-    """First."""
-    browse(pos=0)
-
-
-def browse_index(event):
-    """Go to index."""
-    i = simpledialog.askinteger(
-        "Index", "Where to?", initialvalue=APP.i_path + 1, parent=APP
-    )
-    if not i:
-        return
-    browse(pos=i - 1)
-
-
-def browse_search(event):
-    """Go to next filename matching string."""
-    s = simpledialog.askstring(
-        "File name", "Search for?", initialvalue=APP.paths[APP.i_path], parent=APP
-    )
-    if not s:
-        return
-    i = APP.i_path
-    start = i
-    n = len(APP.paths)
-    while True:
-        i = (i + 1) % n
-        if s in str(APP.paths[i]) or i == start:
-            break
-
-    browse(pos=i)
-
-
-def browse_mouse(event):
-    """Previous/Next."""
-    browse(delta=-1 if event.delta > 0 else 1)
-
-
-def browse_percentage(event):
-    """Shift+1-9 - Go to 10 to 90 percent of the list."""
-    if hasattr(event, "state") and event.state & 1 and event.keycode in range(49, 58):
-        ni = int(len(APP.paths) / 10 * (event.keycode - 48))
-        browse(pos=ni)
-
-
-def browse_next(event=None):
-    """Next."""
-    browse(delta=1)
-
-
-def browse_prev(event=None):
-    """Previous."""
-    browse(delta=-1)
-
-
-def browse_random(event=None):
-    """Go to random index."""
-    browse(pos=random.randint(0, len(APP.paths) - 1))
-
-
 def browse(event=None, delta: int = 0, pos: Optional[int] = None):
     """Browse list of paths."""
+    i, _ = browse_get()
     if pos is not None:
         new_index = pos
     else:
-        new_index = (APP.i_zip if "Names" in APP.info else APP.i_path) + delta
+        new_index = i + delta
 
-    if "Names" in APP.info:
-        if new_index < 0:
+    if APP.b_archives and "Names" in APP.info:
+        if new_index == -1:
             new_index = APP.i_path - 1
-        elif new_index >= len(APP.info["Names"]):
+        elif new_index == len(APP.info["Names"]):
             new_index = APP.i_path + 1
         else:
             APP.i_zip = new_index
@@ -199,6 +135,23 @@ def browse(event=None, delta: int = 0, pos: Optional[int] = None):
     APP.i_path = new_index
     APP.i_zip = 0
     im_load()
+
+
+def browse_archive_toggle(event):
+    """Toggle browsing archives."""
+    APP.b_archives = not APP.b_archives
+    toast(f"Archive browse {APP.b_archives}")
+
+
+def browse_end(event=None):
+    """Last."""
+    _, arr = browse_get()
+    browse(pos=len(arr) - 1)
+
+
+def browse_home(event=None):
+    """First."""
+    browse(pos=0)
 
 
 def browse_frame(event=None):
@@ -220,6 +173,75 @@ def browse_frame(event=None):
     APP.im.seek(APP.im_frame)
     im_resize()
     toast(f"Frame {1 + APP.im_frame}/{1 + n}", 1000)
+
+
+def browse_get():
+    "Return index and array of files."
+    if APP.b_archives and "Names" in APP.info:
+        arr = APP.info["Names"]
+        i = APP.i_zip
+    else:
+        arr = APP.paths
+        i = APP.i_path
+    return i, arr
+
+
+def browse_index(event):
+    """Go to index."""
+    i, _ = browse_get()
+    i = simpledialog.askinteger("Index", "Where to?", initialvalue=i + 1, parent=APP)
+    if not i:
+        return
+    browse(pos=i - 1)
+
+
+def browse_mouse(event):
+    """Previous/Next."""
+    browse(delta=-1 if event.delta > 0 else 1)
+
+
+def browse_next(event=None):
+    """Next."""
+    browse(delta=1)
+
+
+def browse_prev(event=None):
+    """Previous."""
+    browse(delta=-1)
+
+
+def browse_percentage(event):
+    """Shift+1-9 - Go to 10 to 90 percent of the list."""
+    _, arr = browse_get()
+    if hasattr(event, "state") and event.state & 1 and event.keycode in range(49, 58):
+        ni = int(len(arr) / 10 * (event.keycode - 48))
+        browse(pos=ni)
+
+
+def browse_random(event=None):
+    """Go to random index."""
+    _, arr = browse_get()
+    browse(pos=random.randint(0, len(arr) - 1))
+
+
+def browse_search(event):
+    """Go to next filename matching string."""
+    i, arr = browse_get()
+
+    s = simpledialog.askstring(
+        "File name", "Search for?", initialvalue=arr[i], parent=APP
+    )
+    if not s:
+        return
+
+    start = i
+    n = len(arr)
+    while True:
+        i = (i + 1) % n
+        if s in str(arr[i]) or i == start:
+            break
+
+    browse(pos=i)
 
 
 def clipboard_copy(event=None):
@@ -1417,6 +1439,7 @@ BINDS = [
     (browse_index, "g F4"),
     (browse_percentage, "Key"),
     (browse_random, "x"),
+    (browse_archive_toggle, "z"),
     (set_order, "o"),
     (delete_file, "d Delete"),
     (path_open, "p F2"),
@@ -1526,6 +1549,7 @@ def main():
     parser.add_argument(
         "-v", "--verbose", help="set log level", action="count", default=0
     )
+    parser.add_argument("-z", "--archives", help="browse archives", action="store_true")
 
     parsed_args = argparse.Namespace()
     try:
@@ -1576,6 +1600,8 @@ def main():
         slideshow_toggle()
     else:
         APP.slideshow_pause = 4000
+
+    APP.b_archives = args.archives
 
     APP.protocol("WM_DELETE_WINDOW", close)
     menu_init()
