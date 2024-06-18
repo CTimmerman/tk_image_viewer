@@ -176,7 +176,7 @@ def browse_frame(event=None):
 
 
 def browse_get():
-    "Return index and array of files."
+    """Return index and array of files."""
     if APP.b_archives and "Names" in APP.info:
         arr = APP.info["Names"]
         i = APP.i_zip
@@ -853,54 +853,55 @@ def path_save(event=None, filename=None, newmode=None, noexif=False):
             filetypes=APP.SUPPORTED_FILES_WRITE,
             initialfile=p.absolute(),
         )
-    if filename:
-        LOG.info("Saving %s", filename)
-        im = APP.im.convert(newmode) if newmode else APP.im
-        save_all = hasattr(im, "n_frames") and im.n_frames > 1
-        fmt = filename.split(".")[-1].upper()
-        if fmt == "JPG":
-            fmt = "JPEG"
-        if save_all and fmt not in Image.SAVE_ALL:
-            answer = messagebox.showwarning(
-                "Lose Frames",
-                f"Can only store one frame in {fmt}. Ignore the rest?",
-                type=messagebox.YESNO,
+    if not filename:
+        return
+    LOG.info("Saving %s", filename)
+    im = APP.im.convert(newmode) if newmode else APP.im
+    save_all = hasattr(im, "n_frames") and im.n_frames > 1
+    fmt = filename.split(".")[-1].upper()
+    if fmt == "JPG":
+        fmt = "JPEG"
+    if save_all and fmt not in Image.SAVE_ALL:
+        answer = messagebox.showwarning(
+            "Lose Frames",
+            f"Can only store one frame in {fmt}. Ignore the rest?",
+            type=messagebox.YESNO,
+        )
+        if answer != "yes":
+            return
+        save_all = False
+    try:
+        im_info = im.info.copy()
+        if noexif:
+            del im_info["exif"]
+        # print("XXX Saving", im_info)
+        im.save(
+            filename,
+            None,  # Let Pillow handle ".jfif" -> JPEG
+            **im_info,
+            lossless=True,
+            optimize=True,
+            save_all=save_all,  # All frames.
+        )
+        paths_update()
+        toast(f"Saved {filename}")
+    except (IOError, KeyError, TypeError, ValueError) as ex:
+        msg = f"Failed to save as {filename}. {ex}"
+        LOG.error(msg)
+        toast(msg, 4000, "red")
+        if (
+            str(ex) == "EXIF data is too long"  # From Pillow 9.5.0 (2023-04-01)
+            and messagebox.showwarning(
+                "Lose EXIF", f"{ex}. Retry without it?", type=messagebox.YESNO
             )
-            if answer != "yes":
-                return
-            save_all = False
-        try:
-            im_info = im.info.copy()
-            if noexif:
-                del im_info["exif"]
-            # print("XXX Saving", im_info)
-            im.save(
-                filename,
-                None,  # Let Pillow handle ".jfif" -> JPEG
-                **im_info,
-                lossless=True,
-                optimize=True,
-                save_all=save_all,  # All frames.
-            )
-            paths_update()
-            toast(f"Saved {filename}")
-        except (IOError, KeyError, TypeError, ValueError) as ex:
-            msg = f"Failed to save as {filename}. {ex}"
-            LOG.error(msg)
-            toast(msg, 4000, "red")
-            if (
-                str(ex) == "EXIF data is too long"  # From Pillow 9.5.0 (2023-04-01)
-                and messagebox.showwarning(
-                    "Lose EXIF", f"{ex}. Retry without it?", type=messagebox.YESNO
-                )
-                == "yes"
-            ):
-                path_save(filename=filename, newmode=newmode, noexif=True)
-                return
-            if str(ex) == "cannot write mode RGBA as JPEG":
-                path_save(filename=filename, newmode="RGB", noexif=noexif)
-                return
-            raise
+            == "yes"
+        ):
+            path_save(filename=filename, newmode=newmode, noexif=True)
+            return
+        if str(ex) == "cannot write mode RGBA as JPEG":
+            path_save(filename=filename, newmode="RGB", noexif=noexif)
+            return
+        raise
 
 
 def paths_sort(path=None):
