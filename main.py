@@ -8,6 +8,7 @@ by Cees Timmerman
 2024-04-08 Scroll/drag.
 2024-04-10 AVIF, JXL, SVG support.
 2024-04-25 Photoshop IRB, XMP, exiftool support.
+2024-06-19 Windows WYSIWYG copy like PrtScr.
 """
 
 # pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, no-member, too-many-boolean-expressions, too-many-branches, too-many-lines, too-many-locals, too-many-nested-blocks, too-many-statements, unused-argument, unused-import, wrong-import-position
@@ -254,6 +255,20 @@ def clipboard_copy(event=None):
         LOG.debug("Copying title.")
         pyperclip.copy(APP.title())
         toast("Copied title.")
+    elif APP.b_lines and CANVAS.lines:
+        im_left, im_top, _, _ = CANVAS.bbox(CANVAS.image_ref)
+        left, top, right, bottom = CANVAS.bbox(CANVAS.lines[0])
+        im = ImageTk.getimage(CANVAS.tkim).crop(
+            (left - im_left, top - im_top, right - im_left, bottom - im_top)
+        )
+        try:
+            import clipboard  # pylint:disable=import-outside-toplevel  # App loads slow enough as is.
+
+            clipboard.copy(im)
+            toast("Copied selection.")
+        except ImportError as ex:
+            LOG.error(ex)
+            toast(f"{ex}")
     else:
         LOG.debug("Copying path.")
         pyperclip.copy(str(APP.paths[APP.i_path].absolute()))
@@ -395,7 +410,9 @@ def select(event):
     x2 = CANVAS.canvasx(event.x)
     y2 = CANVAS.canvasy(event.y)
     CANVAS.coords(CANVAS.lines[0], x, y, x2, y, x, y2, x2, y2)
-    CANVAS.coords(CANVAS.lines[1], x, y2, x, y, x2, y2, x2, y)
+    CANVAS.coords(CANVAS.lines[1], x, y, x2, y, x, y2, x2, y2)
+    CANVAS.coords(CANVAS.lines[2], x, y2, x, y, x2, y2, x2, y)
+    CANVAS.coords(CANVAS.lines[3], x, y2, x, y, x2, y2, x2, y)
 
 
 @log_this
@@ -490,8 +507,19 @@ def lines_toggle(event=None, on=None, off=None):
     if APP.b_lines and not CANVAS.lines:
         w = APP.winfo_width() - 1
         h = APP.winfo_height() - 1
-        CANVAS.lines.append(CANVAS.create_line(0, 0, w, 0, 0, h, w, h, fill="#f00"))  # type: ignore
-        CANVAS.lines.append(CANVAS.create_line(0, h, 0, 0, w, h, w, 0, fill="#f00"))  # type: ignore
+        # Windows sucks at dashed lines. https://tcl.tk/man/tcl8.5/TkCmd/canvas.htm#M18
+        CANVAS.lines.append(
+            CANVAS.create_line(0, 0, w, 0, 0, h, w, h, fill="white", dash=(6, 4))
+        )
+        CANVAS.lines.append(
+            CANVAS.create_line(0, 0, w, 0, 0, h, w, h, fill="black", dash=(2, 4))
+        )
+        CANVAS.lines.append(
+            CANVAS.create_line(0, h, 0, 0, w, h, w, 0, fill="white", dash=(6, 4))
+        )
+        CANVAS.lines.append(
+            CANVAS.create_line(0, h, 0, 0, w, h, w, 0, fill="black", dash=(2, 4))
+        )
 
 
 def load_mhtml(path):
