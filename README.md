@@ -6,7 +6,7 @@ On my Windows 11 it reads: APNG, AVIF, AVIFS, BLP, BMP, BUFR, BW, CUR, DCX, DDS,
 
 And writes: APNG, AVIF, AVIFS, BLP, BMP, BUFR, BW, DDS, DIB, EMF, EPS, GIF, GRIB, H5, HDF, HEIC, HEICS, HEIF, HEIFS, HIF, ICB, ICNS, ICO, IM, J2C, J2K, JFIF, JP2, JPC, JPE, JPEG, JPF, JPG, JPX, JXL, MPO, MSP, PALM, PBM, PCX, PDF, PFM, PGM, PNG, PNM, PPM, PS, RGB, RGBA, SGI, TGA, TIF, TIFF, VDA, VST, WEBP, WMF, and XBM.
 
-## Install
+## Install/Update
 
 ```cmd
 install
