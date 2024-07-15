@@ -1182,6 +1182,7 @@ def set_supported_files():
     exts[".svg"] = "SVG"
     exts[".svgz"] = "SVG"
     exts[".zip"] = "ZIP"
+    added_exts = ["EML", "MHT", "MHTML", "SVG", "SVGZ", "ZIP"]
 
     type_exts = {}
     for k, v in exts.items():
@@ -1190,11 +1191,15 @@ def set_supported_files():
     APP.SUPPORTED_FILES_READ = [
         (
             "All supported files",
-            " ".join(sorted(list(k for k, v in exts.items() if v in Image.OPEN))),
+            " ".join(
+                sorted(list(k for k, v in exts.items() if v in Image.OPEN) + added_exts)
+            ),
         ),
         ("All files", "*"),
         ("Archives", ".eml .mht .mhtml .zip"),
-        *sorted((k, v) for k, v in type_exts.items() if k in Image.OPEN),
+        *sorted(
+            (k, v) for k, v in type_exts.items() if k in Image.OPEN or k in added_exts
+        ),
     ]
     APP.SUPPORTED_FILES_WRITE = [
         (
@@ -1209,8 +1214,7 @@ def set_supported_files():
         "Open: %s",
         ", ".join(
             sorted(
-                [k[1:].upper() for k, v in exts.items() if v in Image.OPEN]
-                + ["EML", "MHT", "MHTML", "SVG", "SVGZ", "ZIP"]
+                [k[1:].upper() for k, v in exts.items() if v in Image.OPEN] + added_exts
             )
         ),
     )
