@@ -840,11 +840,13 @@ def menu_init():
             zoom_text,
         ):
             continue
+        lbl = fun.__doc__[:-1].title()
         if re.match("[a-z]( |$)", keys):
-            lbl = f"{fun.__doc__[:-1].title()} ({keys[0].upper()})"
-            MENU.add_command(label=lbl, command=fun, underline=len(lbl) - 2)
+            MENU.add_command(
+                label=lbl + f" ({keys[0].upper()})", command=fun, underline=len(lbl) - 2
+            )
         else:
-            MENU.add_command(label=fun.__doc__[:-1].title(), command=fun)
+            MENU.add_command(label=lbl, command=fun)
 
 
 def menu_show(event):
@@ -1043,6 +1045,7 @@ def scroll(event):
 def scroll_toggle(event):
     """Toggle scroll lock."""
     APP.scroll_locked = event.state & 32
+    toast(f"Scroll {not APP.scroll_locked}")
 
 
 def scrollbars_set():
