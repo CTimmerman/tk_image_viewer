@@ -390,9 +390,9 @@ def drag(event):
     new_x = max(0, min(APP.winfo_width() - w, x + dx))
     new_y = max(0, min(APP.winfo_height() - h, y + dy))
     if new_x == 0:
-        CANVAS.xview_scroll(round(-dx / SCROLL_SPEED), "units")
+        CANVAS.xview_scroll(int(-dx / SCROLL_SPEED), "units")
     if new_y == 0:
-        CANVAS.yview_scroll(round(-dy / SCROLL_SPEED), "units")
+        CANVAS.yview_scroll(int(-dy / SCROLL_SPEED), "units")
 
     dx, dy = new_x - x, new_y - y
     CANVAS.move(CANVAS.image_ref, dx, dy)
@@ -854,7 +854,7 @@ def menu_show(event):
     MENU.post(event.x_root, event.y_root)
 
 
-def natural_sort(s):
+def natural_sort(s: str):
     """Sort by number and string."""
     return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", str(s))]
 
