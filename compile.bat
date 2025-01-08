@@ -3,4 +3,4 @@ rem build\__native.c(18944): error C2065: 'CPyStatic_Fits___ALL': undeclared ide
 rem mypyc main.py
 
 rem pip install nuitka
-nuitka main.py --output-dir=nuitka-dist --standalone --onefile --output-filename=tiv.exe --windows-icon-from-ico=eye.ico --macos-app-icon=eye.ico --linux-icon=eye.ico --assume-yes-for-downloads --enable-plugin=tk-inter --deployment
+nuitka main.py --output-dir=dist-nuitka --standalone --onefile --output-filename=tiv.exe --windows-icon-from-ico=eye.ico --macos-app-icon=eye.ico --linux-icon=eye.ico --assume-yes-for-downloads --enable-plugin=tk-inter --remove-output --deployment
