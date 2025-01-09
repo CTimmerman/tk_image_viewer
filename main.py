@@ -1388,6 +1388,12 @@ APP.drop_target_register(DND_FILES)
 APP.dnd_bind("<<Drop>>", drop_handler)
 APP.showing = ""
 APP.title(TITLE)
+APP.iconphoto(
+    False,
+    tkinter.PhotoImage(
+        data="R0lGODlhgACAAHAAACH5BAEAAAIALAAAAACAAIAAgQAAAP///wAAAAAAAAL/lI+py+0Po5y02ouz3rz7D4biSJbmiabqyrbuC8fyTNf2jef6zvf+DwwKh8Si8YhMKpfMpvMJAkgB0NX0is1eqxyt9+vlTsDkMlbMMKvXUrSADYdD43T5so63G/PXgP8PyDdFlAdoeIiYF0SH2Oh4SOcT90hZ+Re3A2e5aalXM8kZCBAqyvapyVkWihnDuIlaGelSRxrAFitr5Vp7S1mnC1rr1/v4i4InXGrma0yy7JVsSNwIbTaiOqwVrbzsCJ0NFoJtq719CZtYTh7uMb6OZX4+Dan+HtZFJl2/vUufpc8ugzt7faitCubvHzctAsGkU2gwFcKEBQHes+DwITxq/1Je0eII0SLDChk1VvTnsZ/IKd6+kPxSbJ8yXB9Nsmx5EUJJkBtNxkTG86TNLTphMgu5clRSlfJ64hzZIN9Rp0sFyQRHdSjRNEanCl1o9RvFm17PcBVbtmPQsFexfl27FcHOtEq1siU7Vm0nl3K77kUK9i7epQdz+v2btangxG4H08zSt+3Tt4oX681bNyVkA4cRU268+Cdj0WbRFh5tGbVkupxXk3YcmO1k2J4HvXE9+zLmsK91S9xs+jfg2Hx6+9ZMtDNy2pWtGk/G9zZuu8YL5T7+2Gzr6Vrp1oSb+bR26dyrekdHnVf07eWbY6+qJvvn620UzK3NnPj99OLHJ7TYX1149HEH4IAOSCXccAMKOCApZDxQYIPxJDiagUUFdx6DE+72Hnj1RRChXR1uiOBycYGoXIAakhgihxe0CN+Iwgwkn38SlIhfherBqF9DPIKmYH/tlbEBjSrO52GQIn6ogZELKglkikkyWSSOGaa24pJURGHllYIJaWMH3ZhoGZhhfuDkk9ZRuNkJY5K5JpwnmvCmnPPkeGYJ8e2Inp22tbAGP1Li2eYLgW5ozhqn7Imog4ph3nBno1PmKcNEkka5ng5MxZOLJEBBhwchvGn56B5YCsLEqc00oWqpXLSakxvsnSorhJbVilGouIow566+/gpssMIOS2yxxh6LbLLKLstss84+C2200k5LbbXWXotttgIUAAA7"
+    ),
+)
 APP_w, APP_h = int(APP.winfo_screenwidth() * 0.75), int(APP.winfo_screenheight() * 0.75)
 APP.old_geometry = f"{APP_w}x{APP_h}+{int(APP_w * 0.125)}+{int(APP_h * 0.125)}"
 APP.geometry(APP.old_geometry)
