@@ -41,8 +41,8 @@ class Fits(enum.IntEnum):
 
 
 BG_COLORS = ["black", "gray10", "gray50", "white"]
-FOLDER = os.path.dirname(os.path.realpath(__file__))
-CONFIG_FILE = os.path.join(FOLDER, "state")
+FOLDER = pathlib.Path().resolve()
+CONFIG_FILE = os.path.join(FOLDER, "tiv.state")
 FONT_SIZE = 14
 RESIZE_QUALITY = [
     Image.Resampling.NEAREST,
@@ -1598,7 +1598,7 @@ def main():
         with open(CONFIG_FILE, "r", encoding="utf8") as fp:
             parser.parse_args(fp.read().split(), parsed_args)
     except IOError as ex:
-        LOG.error(ex)
+        LOG.debug(ex)
 
     args = parser.parse_args(namespace=parsed_args)
 
