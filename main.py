@@ -12,7 +12,7 @@ by Cees Timmerman
 """
 
 # pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, no-member, too-many-boolean-expressions, too-many-branches, too-many-lines, too-many-locals, too-many-nested-blocks, too-many-statements, unused-argument, unused-import, wrong-import-position
-import argparse, base64, enum, functools, gzip, logging, os, pathlib, random, re, time, tkinter, zipfile  # noqa: E401
+import argparse, base64, enum, functools, gzip, logging, os, pathlib, random, re, sys, time, tkinter, zipfile  # noqa: E401
 from io import BytesIO
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Optional
@@ -41,7 +41,9 @@ class Fits(enum.IntEnum):
 
 
 BG_COLORS = ["black", "gray10", "gray50", "white"]
-FOLDER = pathlib.Path().resolve()
+FOLDER = FOLDER = os.path.dirname(
+    os.path.realpath((sys.argv and sys.argv[0]) or sys.executable)
+)
 CONFIG_FILE = os.path.join(FOLDER, "tiv.state")
 FONT_SIZE = 14
 RESIZE_QUALITY = [
@@ -118,7 +120,7 @@ def browse(event=None, delta: int = 0, pos: Optional[int] = None):
     else:
         new_index = i + delta
 
-    if APP.b_archives and "Names" in APP.info:
+    if APP.browse_archives and "Names" in APP.info:
         if new_index == -1:
             new_index = APP.i_path - 1
         elif new_index == len(APP.info["Names"]):
@@ -140,8 +142,8 @@ def browse(event=None, delta: int = 0, pos: Optional[int] = None):
 
 def browse_archive_toggle(event):
     """Toggle browsing archives."""
-    APP.b_archives = not APP.b_archives
-    toast(f"Archive browse {APP.b_archives}")
+    APP.browse_archives = not APP.browse_archives
+    toast(f"Archive browse {APP.browse_archives}")
 
 
 def browse_end(event=None):
@@ -178,7 +180,7 @@ def browse_frame(event=None):
 
 def browse_get():
     """Return index and array of files."""
-    if APP.b_archives and "Names" in APP.info:
+    if APP.browse_archives and "Names" in APP.info:
         arr = APP.info["Names"]
         i = APP.i_zip
     else:
@@ -325,6 +327,12 @@ def config_save():
                 s = s.replace(" -m", "")
                 g = APP.geometry()
             s = re.sub(r" (-g|--geometry) ([^\s]+)", rf" \1 {g}", s)
+            s = re.sub(r" (-r|--resize)( [0-3])?", "", s)
+            s = re.sub(r" (-z|--archives)", "", s)
+            if APP.fit:
+                s += f" -r {APP.fit}"
+            if APP.browse_archives:
+                s += " -z"
             LOG.debug("Saving state %s", s)
             fp.seek(0)
             fp.write(s)
@@ -1309,7 +1317,7 @@ def transpose_set(event=None):
 def fit_handler(event=None):
     """Resize type to fit window."""
     APP.fit = (APP.fit + 1) % len(Fits)
-    toast(str(Fits(APP.fit)))
+    toast("Resize " + Fits(APP.fit).name)
     im_resize()
 
 
@@ -1643,7 +1651,7 @@ def main():
     else:
         APP.slideshow_pause = 4000
 
-    APP.b_archives = args.archives
+    APP.browse_archives = args.archives
 
     APP.protocol("WM_DELETE_WINDOW", close)
     menu_init()
