@@ -177,7 +177,7 @@ def info_decode(b: bytes, encoding: str) -> str:
                 return b.decode(enc)
             except UnicodeDecodeError:
                 pass
-    s = re.sub("[^\x20-\x7F]+", " ", b.decode("ansi"))
+    s = re.sub("[^\x20-\x7f]+", " ", b.decode("ansi"))
     if not s:
         s = str(b[:40])
     return (note if len(b) > 10 else "") + s
@@ -209,6 +209,8 @@ def info_get(im: Image.Image, info: dict, path: str = "") -> str:
                 v = v.decode("utf8")
             except UnicodeDecodeError:
                 v = v.decode("utf_16_be")
+        elif k == "gamma":
+            v = f"{v}" + f" ({1/v:.1f})" if 0 < v < 1 else ""
         elif k == "jfif_unit":
             v = {0: "none", 1: "inch", 2: "cm"}.get(v, v)
         elif k == "jfif_version":
