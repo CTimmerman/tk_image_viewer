@@ -91,10 +91,10 @@ def animation_toggle(event=None):
     """Toggle animation."""
     APP.b_animate = not APP.b_animate
     if APP.b_animate:
-        toast("Starting animation.")
+        toast("Starting animation")
         im_resize(APP.b_animate)
     else:
-        s = "Stopping animation." + (
+        s = "Stopping animation" + (
             f" Frame {1 + (1 + APP.im_frame) % APP.im.n_frames}/{APP.im.n_frames}"
             if hasattr(APP.im, "n_frames")
             else ""
@@ -160,7 +160,7 @@ def browse_home(event=None):
 def browse_frame(event=None):
     """Browse animation frames."""
     if not hasattr(APP.im, "n_frames"):
-        toast("No frames.")
+        toast("No frames")
         return
     n = APP.im.n_frames - 1
     k = event.keysym
@@ -237,26 +237,31 @@ def browse_search(event):
     if not s:
         return
 
+    found = False
     start = i
     n = len(arr)
     while True:
         i = (i + 1) % n
-        if s in str(arr[i]) or i == start:
+        if s in str(arr[i]):
+            found = True
             break
-
+        if i == start:
+            break
+    if not found:
+        toast(f"{s} not found")
     browse(pos=i)
 
 
 def clipboard_copy(event=None):
     """Copy info to clipboard."""
     if CANVAS.find_closest(0, 0) == (CANVAS.text_bg,):
-        LOG.debug("Copying overlay.")
+        LOG.debug("Copying overlay")
         pyperclip.copy(CANVAS.itemcget(CANVAS.text, "text"))
-        toast("Copied info.")
+        toast("Copied info")
     elif isinstance(APP.winfo_children()[-1], tkinter.Label):
         LOG.debug("Copying title.")
         pyperclip.copy(APP.title())
-        toast("Copied title.")
+        toast("Copied title")
     elif APP.b_lines and CANVAS.lines:
         im_left, im_top, _, _ = CANVAS.bbox(CANVAS.image_ref)
         left, top, right, bottom = CANVAS.bbox(CANVAS.lines[0])
@@ -267,14 +272,14 @@ def clipboard_copy(event=None):
             import clipboard  # pylint:disable=import-outside-toplevel  # App loads slow enough as is.
 
             clipboard.copy(im)
-            toast("Copied selection.")
+            toast("Copied selection")
         except ImportError as ex:
             LOG.error(ex)
             toast(f"{ex}")
     else:
-        LOG.debug("Copying path.")
+        LOG.debug("Copying path")
         pyperclip.copy(str(APP.paths[APP.i_path].absolute()))
-        toast("Copied path.")
+        toast("Copied path")
 
 
 def clipboard_paste(event=None):
@@ -289,16 +294,27 @@ def clipboard_paste(event=None):
     if isinstance(im, str):
         im = [line.strip('"') for line in im.split("\n")]
     if isinstance(im, list):
-        APP.paths = [pathlib.Path(s) for s in im]
-        LOG.debug("Set paths to %s", APP.paths)
-        APP.i_path = 0
-        im_load()
+        paths_set([pathlib.Path(s) for s in im])
         return
     APP.im = im
     APP.info = {"Pasted": time.ctime()}
     APP.i_path = 0
     APP.paths = ["pasted"]
     im_resize(APP.im)
+
+
+def paths_set(paths: list):
+    """Change paths."""
+    APP.paths = [pathlib.Path(s) for s in paths]
+    LOG.debug("Set paths to %s", APP.paths)
+    if not APP.paths:
+        toast("No paths")
+        return
+    if len(APP.paths) == 1:
+        paths_update(APP.paths[0])
+        return
+    APP.i_path = 0
+    im_load()
 
 
 @log_this
@@ -427,22 +443,25 @@ def select(event):
 def drop_handler(event):
     """Handles dropped files."""
     LOG.debug("Dropped %r", event.data)
-    APP.paths = [
-        pathlib.Path(line.strip('"'))
-        for line in re.findall("{(.+?)}" if "{" in event.data else "[^ ]+", event.data)
-    ]  # Windows 11.
-    if isinstance(APP.paths, list):
-        LOG.debug("Set paths to %s", APP.paths)
-        APP.i_path = 0
-        im_load()
+    paths_set(
+        [
+            pathlib.Path(line.strip('"'))
+            for line in re.findall(
+                "{(.+?)}" if "{" in event.data else "[^ ]+", event.data
+            )
+        ]
+    )  # Windows 11.
 
 
 def error_show(msg: str):
     """Show error."""
     APP.title(msg + " - " + TITLE)
     LOG.error(msg)
-    ERROR_OVERLAY.config(text=msg)
-    ERROR_OVERLAY.lift()
+    ERROR_OVERLAY.lower()
+    info_set(msg)
+    info_show()
+    # ERROR_OVERLAY.config(text=msg)
+    # ERROR_OVERLAY.lift()
     APP.i_path_old = -1  # To refresh image info.
 
 
@@ -659,6 +678,8 @@ def im_load(path=None):
         #         str(v)[:80] + "..." if len(str(v)) > 80 else v,
         #     )
         im_resize(APP.b_animate)
+        if APP.showing not in ("", "help"):
+            info_toggle(None, True)
     # pylint: disable=W0718
     except (
         tkinter.TclError,
@@ -671,14 +692,17 @@ def im_load(path=None):
         PermissionError,  # NOSONAR
         BaseException,  # NOSONAR  # https://github.com/PyO3/pyo3/issues/3519
     ) as ex:
-        err_msg = f"im_load {type(ex).__name__}: {ex}"
+        if os.path.isdir(path):
+            err_msg = "Press enter to open folder:"
+        else:
+            err_msg = f"{type(ex).__name__}: {ex}"
         APP.im = None
-        msg = f"{msg} {err_msg} {path}"
+        msg = f"{msg} {err_msg}{f' {path}' if repr(str(path)) not in err_msg else ''}"
         error_show(msg)
         raise
 
 
-def get_fit_ratio(im_w, im_h):
+def get_fit_ratio(im_w: int, im_h: int) -> float:
     """Get fit ratio."""
     ratio = 1.0
     w = APP.winfo_width()
@@ -721,7 +745,7 @@ def im_scale(im):
     return im
 
 
-def im_resize(loop=False):
+def im_resize(loop: bool = False):
     """Resize image."""
     if not (hasattr(APP, "im") and APP.im):
         return
@@ -800,13 +824,15 @@ def im_show(im):
     scrollbars_set()
 
 
-def info_toggle(event=None):
+def info_toggle(event=None, show: bool | None = None):
     """Toggle info overlay."""
-    if APP.showing in ("", "help"):
+    if show or APP.showing in ("", "help"):
         CANVAS.config(cursor="watch")
         info_set(
             APP.title()[: -len(" - " + TITLE)]
-            + info_get(APP.im, APP.info, APP.paths[APP.i_path])
+            + info_get(
+                APP.im, APP.info, APP.paths[APP.i_path if APP.i_path >= 0 else 0]
+            )
         )
         LOG.debug("Showing info:\n%s", CANVAS.itemcget(CANVAS.text, "text"))
         info_show()
@@ -976,6 +1002,25 @@ def paths_sort(path=None):
         error_show("Not found: %s" % ex)
 
 
+def paths_up(event=None, path=None):
+    """Go to parent path."""
+    APP.i_path = max(APP.i_path, 0)
+    if not path and APP.paths:
+        path = APP.paths[APP.i_path]
+
+    p = pathlib.Path(path or ".")
+    p = p.parent
+    paths_update(None, p.parent)
+
+
+def paths_down(event=None, path=None):
+    """Go to sub path."""
+    APP.i_path = max(APP.i_path, 0)
+    if not path and APP.paths:
+        path = APP.paths[APP.i_path]
+    paths_update(None, path)
+
+
 def paths_update(event=None, path=None):
     """Update path info."""
     if not path:
@@ -984,11 +1029,16 @@ def paths_update(event=None, path=None):
     p = pathlib.Path(path)
     if not p.is_dir():
         p = p.parent
-    LOG.debug("Reading %s...", p)
-    APP.paths = list(p.glob("*"))
-    LOG.debug("Found %s files.", len(APP.paths))
-    LOG.debug("Filter?")
-    paths_sort(path)
+    LOG.debug("Reading %s", p)
+    paths = list(p.glob("*"))
+    if paths:
+        APP.paths = paths
+        APP.i_path = 0
+        LOG.debug("Found %s files.", len(APP.paths))
+        # LOG.debug("Filter?")
+        paths_sort(path)
+    else:
+        toast("Folder empty")
 
 
 def refresh_loop():
@@ -1004,10 +1054,10 @@ def refresh_toggle(event=None):
     """Toggle autoupdate."""
     APP.update_interval = -APP.update_interval
     if APP.update_interval > 0:
-        toast(f"Refreshing every {APP.update_interval/1000:.2}s.")
+        toast(f"Refreshing every {APP.update_interval/1000:.2}s")
         refresh_loop()
     else:
-        toast("Refresh off.")
+        toast("Refresh off")
 
 
 def resize_handler(event=None):
@@ -1282,14 +1332,15 @@ def slideshow_toggle(event=None):
     """Toggle slideshow."""
     APP.b_slideshow = not APP.b_slideshow
     if APP.b_slideshow:
-        toast("Starting slideshow.")
+        toast("Starting slideshow")
         APP.after(APP.slideshow_pause, slideshow_run)
     else:
-        toast("Stopping slideshow.")
+        toast("Stopping slideshow")
 
 
 def toast(msg: str, ms: int = 2000, fg="#00FF00"):
     """Temporarily show a status message."""
+    LOG.info("Toast: %s", msg)
     TOAST.config(text=msg, fg=fg)
     TOAST.lift()
     if hasattr(APP, "toast_timer"):
@@ -1468,7 +1519,7 @@ BINDS = [
     (animation_toggle, "a"),
     (slideshow_toggle, "b Pause"),
     (set_bg, "c"),
-    (fullscreen_toggle, "f F11 Return"),
+    (fullscreen_toggle, "f F11"),
     (close, "Escape"),
     (help_toggle, "h F1"),
     (info_toggle, "i"),
@@ -1482,7 +1533,9 @@ BINDS = [
     (zoom_text, "Alt-MouseWheel Alt-minus Alt-plus Alt-equal"),
     (browse_mouse, "MouseWheel"),
     (browse_next, "Right Down Next space Button-5"),
-    (browse_prev, "Left Up Prior BackSpace Button-4"),
+    (browse_prev, "Left Up Prior Button-4"),
+    (paths_down, "Return"),
+    (paths_up, "BackSpace"),
     (browse_end, "End"),
     (browse_home, "Key-1 Home"),
     (browse_search, "F3"),
