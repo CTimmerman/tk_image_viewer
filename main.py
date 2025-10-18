@@ -42,7 +42,7 @@ class Fits(enum.IntEnum):
 
 BG_COLORS = ["black", "gray10", "gray50", "white"]
 FOLDER = FOLDER = os.path.dirname(
-    os.path.realpath((sys.argv and sys.argv[0]) or sys.executable)
+    os.path.realpath((sys.argv and sys.argv[0]) or sys.executable)  # type: ignore
 )
 CONFIG_FILE = os.path.join(FOLDER, "tiv.state")
 FONT_SIZE = 14
@@ -59,7 +59,7 @@ SCALE_MAX = 40.0
 SCROLL_SPEED = 10.0
 SORTS = "natural string ctime mtime size".split()
 TIME_FORMAT = "%Y-%m-%d %H:%M:%S%z"
-TITLE = __doc__.split("\n", 1)[0]
+TITLE = __doc__.split("\n", 1)[0]  # type: ignore
 VERBOSITY_LEVELS = [
     logging.CRITICAL,
     logging.ERROR,
@@ -157,7 +157,7 @@ def browse_home(event=None):
     browse(pos=0)
 
 
-def browse_frame(event=None):
+def browse_frame(event):
     """Browse animation frames."""
     if not hasattr(APP.im, "n_frames"):
         toast("No frames")
@@ -278,7 +278,7 @@ def clipboard_copy(event=None):
             toast(f"{ex}")
     else:
         LOG.debug("Copying path")
-        pyperclip.copy(str(APP.paths[APP.i_path].absolute()))
+        pyperclip.copy(str(path_get().absolute()))
         toast("Copied path")
 
 
@@ -300,7 +300,7 @@ def clipboard_paste(event=None):
     APP.info = {"Pasted": time.ctime()}
     APP.i_path = 0
     APP.paths = ["pasted"]
-    im_resize(APP.im)
+    im_resize()
 
 
 def paths_set(paths: list):
@@ -363,13 +363,12 @@ def debug_keys(event=None):
 
 def delete_file(event=None):
     """Delete file. Bypasses Trash."""
-    path = APP.paths[APP.i_path]
+    path = path_get()
     msg = f"Delete? {path}"
     LOG.warning(msg)
-    answer = messagebox.showwarning(
-        "Delete File", f"Permanently delete {path}?", type=messagebox.YESNO
-    )
-    if answer == "yes":
+    if messagebox.askokcancel(
+        "Delete File", f"Permanently delete {path}?", icon=messagebox.WARNING
+    ):
         LOG.warning("Deleting %s", path)
         os.remove(path)
         paths_update()
@@ -455,13 +454,13 @@ def drop_handler(event):
 
 def error_show(msg: str):
     """Show error."""
+    # Remove old image from help/info overlay.
+    im_show(Image.new("1", (1, 1)))
     APP.title(msg + " - " + TITLE)
-    LOG.error(msg)
-    ERROR_OVERLAY.lower()
-    info_set(msg)
-    info_show()
-    # ERROR_OVERLAY.config(text=msg)
-    # ERROR_OVERLAY.lift()
+    if "Press enter" not in msg:
+        LOG.error(msg)
+    ERROR_OVERLAY.config(text=msg, fg="yellow" if "Press enter" in msg else "red")
+    ERROR_OVERLAY.lift()
     APP.i_path_old = -1  # To refresh image info.
 
 
@@ -470,6 +469,7 @@ def help_toggle(event=None):
     if APP.showing == "help":
         info_hide()
     else:
+        APP.showing = "help"
         lines = []
         for fun, keys in BINDS:
             if fun in (drag_begin, drag_end, resize_handler):
@@ -493,8 +493,8 @@ def help_toggle(event=None):
                             .replace(" Prior ", " PageUp ")
                             .replace(" Next ", " PageDown "),
                         ),
-                        0,
-                        re.MULTILINE,
+                        count=0,
+                        flags=re.MULTILINE,
                     )
                     + " - "
                 )
@@ -502,14 +502,12 @@ def help_toggle(event=None):
             )
         msg = "\n".join(lines)
         info_set(msg)
-        APP.showing = "help"
         info_show()
         LOG.debug(msg)
 
 
 def info_set(msg: str):
     """Change info text."""
-    APP.showing = msg
     CANVAS.itemconfig(CANVAS.text, text=msg)  # type: ignore
     info_bg_update()
 
@@ -536,16 +534,16 @@ def lines_toggle(event=None, on=None, off=None):
         h = APP.winfo_height() - 1
         # Windows sucks at dashed lines. https://tcl.tk/man/tcl8.5/TkCmd/canvas.htm#M18
         CANVAS.lines.append(
-            CANVAS.create_line(0, 0, w, 0, 0, h, w, h, fill="white", dash=(6, 4))
+            CANVAS.create_line(0, 0, w, 0, 0, h, w, h, fill="white", dash=(6, 4))  # type: ignore[call-arg]
         )
         CANVAS.lines.append(
-            CANVAS.create_line(0, 0, w, 0, 0, h, w, h, fill="black", dash=(2, 4))
+            CANVAS.create_line(0, 0, w, 0, 0, h, w, h, fill="black", dash=(2, 4))  # type: ignore[call-arg]
         )
         CANVAS.lines.append(
-            CANVAS.create_line(0, h, 0, 0, w, h, w, 0, fill="white", dash=(6, 4))
+            CANVAS.create_line(0, h, 0, 0, w, h, w, 0, fill="white", dash=(6, 4))  # type: ignore[call-arg]
         )
         CANVAS.lines.append(
-            CANVAS.create_line(0, h, 0, 0, w, h, w, 0, fill="black", dash=(2, 4))
+            CANVAS.create_line(0, h, 0, 0, w, h, w, 0, fill="black", dash=(2, 4))  # type: ignore[call-arg]
         )
 
 
@@ -553,7 +551,7 @@ def load_mhtml(path):
     """Load EML/MHT/MHTML."""
     with open(path, "r", encoding="utf8") as f:
         mhtml = f.read()
-    boundary = re.search('boundary="(.+)"', mhtml).group(1)
+    boundary = re.search('boundary="(.+)"', mhtml).group(1)  # type: ignore
     parts = mhtml.split(boundary)[1:-1]
     APP.info["Names"] = []
     new_parts = []
@@ -574,18 +572,19 @@ def load_mhtml(path):
         f"Getting image {1 + APP.i_zip}/{len(new_parts)} of {len(parts)} parts: {APP.info['Names'][APP.i_zip]}",
     )
     data = new_parts[APP.i_zip]
+    im_file = None
     try:
         im_file = BytesIO(base64.standard_b64decode(data.rstrip()))
         APP.im = Image.open(im_file)
     except (Image.UnidentifiedImageError, ValueError) as ex:
         LOG.error("MHT %s", ex)
         LOG.error("DATA %r", data[:180])
-        im_file.seek(0)
-        LOG.error("DECODED %s", im_file.read()[:80])
-        # im_file.seek(0)
-        # https://github.com/fdintino/pillow-avif-plugin/issues/13
-        # with open(f"tiv_mhtml_image_{1 + APP.i_zip}_fail.avif", "wb") as f:
-        #     f.write(im_file.read())
+        if im_file:
+            im_file.seek(0)
+            LOG.error("DECODED %s", im_file.read()[:80])
+            # https://github.com/fdintino/pillow-avif-plugin/issues/13
+            # with open(f"tiv_mhtml_image_{1 + APP.i_zip}_fail.avif", "wb") as f:
+            #     f.write(im_file.read())
         ex.args = (f"Failed to load image {1 + APP.i_zip} of",)
         raise ex
 
@@ -647,11 +646,7 @@ def load_zip(path):
 
 def im_load(path=None):
     """Load image."""
-    if not path and APP.paths:
-        path = APP.paths[APP.i_path]
-    else:
-        return
-
+    path = path_get(path)
     msg = f"{APP.i_path+1}/{len(APP.paths)}"
     LOG.debug("Loading %s %s", msg, path)
 
@@ -678,8 +673,8 @@ def im_load(path=None):
         #         str(v)[:80] + "..." if len(str(v)) > 80 else v,
         #     )
         im_resize(APP.b_animate)
-        if APP.showing not in ("", "help"):
-            info_toggle(None, True)
+        # if APP.showing not in ("", "help"):
+        #     info_toggle(None, True)
     # pylint: disable=W0718
     except (
         tkinter.TclError,
@@ -698,8 +693,8 @@ def im_load(path=None):
             err_msg = f"{type(ex).__name__}: {ex}"
         APP.im = None
         msg = f"{msg} {err_msg}{f' {path}' if repr(str(path)) not in err_msg else ''}"
+
         error_show(msg)
-        raise
 
 
 def get_fit_ratio(im_w: int, im_h: int) -> float:
@@ -806,11 +801,11 @@ def im_show(im):
         else ""
     )
     msg = (
-        f"{APP.i_path+1}/{len(APP.paths)}{zip_info} {'%sx%s' % APP.im.size}"
-        f" @ {'%sx%s' % im.size} {APP.paths[APP.i_path]}"
+        f"{APP.i_path+1}/{len(APP.paths)}{zip_info} {('%sx%s' % APP.im.size) if APP.im else ''}"
+        f" @ {'%sx%s' % im.size} {path_get()}"
     )
     APP.title(msg + " - " + TITLE)
-    if APP.showing not in ("", "help") and (
+    if APP.showing == "info" and (
         not hasattr(APP, "i_path_old")
         or APP.i_path != APP.i_path_old
         or not hasattr(APP, "i_path_old")
@@ -819,14 +814,17 @@ def im_show(im):
         APP.i_path_old = APP.i_path
         APP.i_zip_old = APP.i_zip
         CANVAS.config(cursor="watch")
-        info_set(msg + info_get(APP.im, APP.info, APP.paths[APP.i_path]))
+        info_set(msg + info_get(APP.im, APP.info, path_get()))
         CANVAS.config(cursor="")
+    else:
+        info_set("")
     scrollbars_set()
 
 
 def info_toggle(event=None, show: bool | None = None):
     """Toggle info overlay."""
-    if show or APP.showing in ("", "help"):
+    if show or APP.showing != "info":
+        APP.showing = "info"
         CANVAS.config(cursor="watch")
         info_set(
             APP.title()[: -len(" - " + TITLE)]
@@ -834,7 +832,7 @@ def info_toggle(event=None, show: bool | None = None):
                 APP.im, APP.info, APP.paths[APP.i_path if APP.i_path >= 0 else 0]
             )
         )
-        LOG.debug("Showing info:\n%s", CANVAS.itemcget(CANVAS.text, "text"))
+        LOG.debug("Showing info:\n%s", CANVAS.itemcget(CANVAS.text, "text"))  # type: ignore
         info_show()
         CANVAS.config(cursor="")
     else:
@@ -843,6 +841,7 @@ def info_toggle(event=None, show: bool | None = None):
 
 def info_show():
     """Show info overlay."""
+    ERROR_OVERLAY.lower()
     CANVAS.lift(CANVAS.text_bg)
     CANVAS.lift(CANVAS.text)
     scrollbars_set()
@@ -850,6 +849,7 @@ def info_show():
 
 def info_hide():
     """Hide info overlay."""
+    APP.showing = ""
     info_set("")
     CANVAS.lower(CANVAS.text_bg)
     CANVAS.lower(CANVAS.text)
@@ -893,6 +893,13 @@ def natural_sort(s: str):
     return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", str(s))]
 
 
+def path_get(path: pathlib.Path | None = None) -> pathlib.Path:
+    """Return shown path."""
+    if path:
+        return path
+    return APP.paths[max(APP.i_path, 0)]
+
+
 @log_this
 def path_open(event=None):
     """Pick a file to open...."""
@@ -905,11 +912,9 @@ def path_open(event=None):
 def path_save(event=None, filename=None, newmode=None, noexif=False):
     """Save file as...."""
     if "Names" in APP.info:
-        p = pathlib.Path(
-            str(APP.paths[APP.i_path]) + "." + APP.info["Names"][APP.i_zip]
-        )
+        p = pathlib.Path(str(path_get()) + "." + APP.info["Names"][APP.i_zip])
     else:
-        p = APP.paths[APP.i_path]
+        p = path_get()
 
     if not filename:
         filename = filedialog.asksaveasfilename(
@@ -926,12 +931,11 @@ def path_save(event=None, filename=None, newmode=None, noexif=False):
     if fmt == "JPG":
         fmt = "JPEG"
     if save_all and fmt not in Image.SAVE_ALL:
-        answer = messagebox.showwarning(
+        if not messagebox.askokcancel(
             "Lose Frames",
             f"Can only store one frame in {fmt}. Ignore the rest?",
-            type=messagebox.YESNO,
-        )
-        if answer != "yes":
+            icon=messagebox.WARNING,
+        ):
             return
         save_all = False
     try:
@@ -953,12 +957,10 @@ def path_save(event=None, filename=None, newmode=None, noexif=False):
         msg = f"Failed to save as {filename}. {ex}"
         LOG.error(msg)
         toast(msg, 4000, "red")
-        if (
-            str(ex) == "EXIF data is too long"  # From Pillow 9.5.0 (2023-04-01)
-            and messagebox.showwarning(
-                "Lose EXIF", f"{ex}. Retry without it?", type=messagebox.YESNO
-            )
-            == "yes"
+        if str(
+            ex
+        ) == "EXIF data is too long" and messagebox.askokcancel(  # From Pillow 9.5.0 (2023-04-01)
+            "Lose EXIF", f"{ex}. Retry without it?", icon=messagebox.WARNING
         ):
             path_save(filename=filename, newmode=newmode, noexif=True)
             return
@@ -974,8 +976,7 @@ def paths_sort(path=None):
     if not APP.paths:
         LOG.error("No paths to sort.")
         return
-    if not path:
-        path = APP.paths[APP.i_path]
+    path = path_get(path)
 
     for s in APP.sort.split(","):
         if s == "natural":
@@ -1005,8 +1006,7 @@ def paths_sort(path=None):
 def paths_up(event=None, path=None):
     """Go to parent path."""
     APP.i_path = max(APP.i_path, 0)
-    if not path and APP.paths:
-        path = APP.paths[APP.i_path]
+    path = path_get(path)
 
     p = pathlib.Path(path or ".")
     p = p.parent
@@ -1016,16 +1016,13 @@ def paths_up(event=None, path=None):
 def paths_down(event=None, path=None):
     """Go to sub path."""
     APP.i_path = max(APP.i_path, 0)
-    if not path and APP.paths:
-        path = APP.paths[APP.i_path]
+    path = path_get(path)
     paths_update(None, path)
 
 
 def paths_update(event=None, path=None):
     """Update path info."""
-    if not path:
-        path = APP.paths[APP.i_path]
-
+    path = path_get(path)
     p = pathlib.Path(path)
     if not p.is_dir():
         p = p.parent
@@ -1195,7 +1192,7 @@ def set_bg(event=None):
     CANVAS.itemconfig(CANVAS.im_bg, fill=bg)
     ERROR_OVERLAY.config(bg=bg)
     MENU.config(
-        bg=bg, fg=fg, bd=0, relief="flat", tearoff=0, activeborderwidth=0
+        bg=bg, fg=fg, bd=0, relief="flat", tearoff=False, activeborderwidth=0
     )  # Can't stop border on Windows!
     style.configure("TScrollbar", troughcolor=bg, background="darkgrey")
     style.map("TScrollbar", background=[("pressed", "!disabled", fg), ("active", fg)])
@@ -1443,6 +1440,7 @@ def zoom_text(event):
 
 
 APP = TkinterDnD.Tk()  # notice - use this instead of tk.Tk()
+APP.withdraw()
 APP.drop_target_register(DND_FILES)
 APP.dnd_bind("<<Drop>>", drop_handler)
 APP.showing = ""
@@ -1469,7 +1467,7 @@ TOAST = tkinter.Label(
 )
 TOAST.place(x=0, y=0)
 
-CANVAS = tkinter.Canvas(bg="blue", borderwidth=0, highlightthickness=0, relief="flat")
+CANVAS = tkinter.Canvas(bg="black", borderwidth=0, highlightthickness=0, relief="flat")
 # Opening the context menu only triggers drag_end.
 CANVAS.dragx = 0  # type: ignore
 CANVAS.dragy = 0  # type: ignore
@@ -1519,7 +1517,7 @@ BINDS = [
     (animation_toggle, "a"),
     (slideshow_toggle, "b Pause"),
     (set_bg, "c"),
-    (fullscreen_toggle, "f F11"),
+    (fullscreen_toggle, "f F11 Alt-Return"),
     (close, "Escape"),
     (help_toggle, "h F1"),
     (info_toggle, "i"),
@@ -1536,8 +1534,8 @@ BINDS = [
     (browse_prev, "Left Up Prior Button-4"),
     (paths_down, "Return"),
     (paths_up, "BackSpace"),
-    (browse_end, "End"),
-    (browse_home, "Key-1 Home"),
+    (browse_end, "End Alt-Right"),
+    (browse_home, "Key-1 Home Alt-Left"),
     (browse_search, "F3"),
     (browse_index, "g F4"),
     (browse_percentage, "Key"),
@@ -1710,6 +1708,7 @@ def main():
     menu_init()
     bind()
     set_bg()
+    APP.deiconify()
     APP.mainloop()
 
 

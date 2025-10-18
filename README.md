@@ -49,7 +49,7 @@ Binds:
 A - Toggle animation.
 B Pause - Toggle slideshow.
 C - Set background color.
-F F11 Return - Toggle fullscreen.
+F F11 Alt+Return - Toggle fullscreen.
 Escape - Close fullscreen or app.
 H F1 - Toggle help.
 I - Toggle info overlay.
@@ -63,9 +63,11 @@ T Shift+T - Transpose image.
 Alt+Wheel Alt+Minus Alt+Plus Alt+Equal - Zoom text.
 Wheel - Previous/Next.
 Right Down PageDown space B5 - Next.
-Left Up PageUp BackSpace B4 - Previous.
-End - Last.
-1 Home - First.
+Left Up PageUp B4 - Previous.
+Return - Go to sub path.
+BackSpace - Go to parent path.
+End Alt+Right - Last.
+1 Home Alt+Left - First.
 F3 - Go to next filename matching string.
 G F4 - Go to index.
 Shift+1-9 - Go to 10 to 90 percent of the list.

@@ -3,6 +3,7 @@
 """
 
 # pylint: disable=comparison-with-callable, line-too-long, multiple-imports, too-many-branches
+import pathlib
 import logging, re, subprocess  # noqa: E401
 from io import BytesIO
 from typing import Literal, cast
@@ -183,7 +184,7 @@ def info_decode(b: bytes, encoding: str) -> str:
     return (note if len(b) > 10 else "") + s
 
 
-def info_get(im: Image.Image, info: dict, path: str = "") -> str:
+def info_get(im: Image.Image, info: dict, path: pathlib.Path | None = None) -> str:
     """Get image info."""
     msg = ""
     for k, v in info.items():
@@ -322,8 +323,10 @@ def info_exif(im: Image.Image) -> str:
     return s.strip()
 
 
-def info_exiftool(path: str) -> str:
+def info_exiftool(path: pathlib.Path) -> str:
     """Uses exiftool on path."""
+    if not path:
+        return ""
     s = ""
     try:
         output = subprocess.run(
