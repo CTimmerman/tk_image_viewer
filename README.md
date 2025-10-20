@@ -2,9 +2,11 @@
 
 An image viewer that supports arrow keys, HEIC, WebP, foreign characters, long paths, and zip. Unlike IrfanView 64 4.54, JPEGView 1.0.37, and SumatraPDF v3.5.2 64-bit.
 
-On my Windows 11 it reads: APNG, AVIF, AVIFS, BLP, BMP, BUFR, BW, CUR, DCX, DDS, DIB, EMF, EML, EPS, FIT, FITS, FLC, FLI, FTC, FTU, GBR, GIF, GRIB, H5, HDF, HEIC, HEICS, HEIF, HEIFS, HIF, ICB, ICNS, ICO, IIM, IM, J2C, J2K, JFIF, JP2, JPC, JPE, JPEG, JPF, JPG, JPX, JXL, MHT, MHTML, MPEG, MPG, MSP, PBM, PCD, PCX, PFM, PGM, PNG, PNM, PPM, PS, PSD, PXR, QOI, RAS, RGB, RGBA, SGI, SVG, SVGZ, TGA, TIF, TIFF, VDA, VST, WEBP, WMF, XBM, XPM, and ZIP
+On my Windows 11 it reads:
+APNG, AVIF, AVIFS, BLP, BMP, BUFR, BW, CUR, DCX, DDS, DIB, EMF, EML, EPS, FIT, FITS, FLC, FLI, FTC, FTU, GBR, GIF, GRIB, H5, HDF, HEIC, HEICS, HEIF, HEIFS, HIF, ICB, ICNS, ICO, IIM, IM, J2C, J2K, JFIF, JP2, JPC, JPE, JPEG, JPF, JPG, JPX, JXL, MHT, MHTML, MPEG, MPG, MSP, PBM, PCD, PCX, PFM, PGM, PNG, PNM, PPM, PS, PSD, PXR, QOI, RAS, RGB, RGBA, SGI, SVG, SVGZ, TGA, TIF, TIFF, VDA, VST, WEBP, WMF, XBM, XPM, ZIP
 
-And writes: APNG, AVIF, AVIFS, BLP, BMP, BUFR, BW, DDS, DIB, EMF, EPS, GIF, GRIB, H5, HDF, HEIC, HEICS, HEIF, HEIFS, HIF, ICB, ICNS, ICO, IM, J2C, J2K, JFIF, JP2, JPC, JPE, JPEG, JPF, JPG, JPX, JXL, MPO, MSP, PALM, PBM, PCX, PDF, PFM, PGM, PNG, PNM, PPM, PS, RGB, RGBA, SGI, TGA, TIF, TIFF, VDA, VST, WEBP, WMF, and XBM.
+And writes:
+APNG, AVIF, AVIFS, BLP, BMP, BUFR, BW, DDS, DIB, EMF, EPS, GIF, GRIB, H5, HDF, HEIC, HEICS, HEIF, HEIFS, HIF, ICB, ICNS, ICO, IM, J2C, J2K, JFIF, JP2, JPC, JPE, JPEG, JPF, JPG, JPX, JXL, MPO, MSP, PALM, PBM, PCX, PDF, PFM, PGM, PNG, PNM, PPM, PS, QOI, RGB, RGBA, SGI, TGA, TIF, TIFF, VDA, VST, WEBP, WMF, XBM
 
 ## Install/Update
 
@@ -26,19 +28,16 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
-  -b [ms], --browse [ms]
-                        browse to next image every N ms (default 4000)
+  -b, --browse [ms]     browse to next image every N ms (default 4000)
   -f, --fullscreen      run fullscreen
-  -g WxH+X+Y, --geometry WxH+X+Y
+  -g, --geometry WxH+X+Y
                         set window geometry, eg -g +0+-999
   -m, --maximize        maximize window
-  -o ORDER, --order ORDER
-                        sort order. [NATURAL|string|random|mtime|ctime|size]
-  -q N, --quality N     set antialiasing level (0-5, default 0)
-  -r [N], --resize [N]  resize image to fit window (0-3: none, all, big, small. default 1)
-  -t N, --transpose N   transpose 0-6 flip_left_right, flip_top_bottom, rotate_90, rotate_180, rotate_270, transpose, transverse
-  -u [ms], --update [ms]
-                        update interval (default 4000)
+  -o, --order ORDER     sort order. [NATURAL|string|random|mtime|ctime|size]
+  -q, --quality N       set antialiasing level (0-5, default 0)
+  -r, --resize [N]      resize image to fit window (0-3: none, all, big, small. default 1)
+  -t, --transpose N     transpose 0-6 flip_left_right, flip_top_bottom, rotate_90, rotate_180, rotate_270, transpose, transverse
+  -u, --update [ms]     update interval (default 4000)
   -v, --verbose         set log level
   -z, --archives        browse archives
 ```
