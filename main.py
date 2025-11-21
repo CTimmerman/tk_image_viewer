@@ -311,7 +311,7 @@ def paths_set(paths: list):
         toast("No paths")
         return
     if len(APP.paths) == 1:
-        paths_update(APP.paths[0])
+        paths_update(None, APP.paths[0])
         return
     APP.i_path = 0
     im_load()
@@ -553,7 +553,7 @@ def load_mhtml(path):
         mhtml = f.read()
     boundary = re.search('boundary="(.+)"', mhtml).group(1)  # type: ignore
     parts = mhtml.split(boundary)[1:-1]
-    APP.info["Names"] = []
+    names = []
     new_parts = []
     for p in parts:
         meta, data = p.split("\n\n", maxsplit=1)
@@ -563,10 +563,11 @@ def load_mhtml(path):
         if "\ncontent-type:" in m and "\ncontent-type: image" not in m:
             continue
         name = sorted(meta.strip().split("\n"))[0].split("/")[-1]
-        APP.info["Names"].append(name)
+        names.append(name)
         new_parts.append(data)
     if not new_parts:
         raise ValueError(f"No image found in {path}")
+    APP.info["Names"] = names
     LOG.debug(
         "%s",
         f"Getting image {1 + APP.i_zip}/{len(new_parts)} of {len(parts)} parts: {APP.info['Names'][APP.i_zip]}",
@@ -692,7 +693,7 @@ def im_load(path=None):
         else:
             err_msg = f"{type(ex).__name__}: {ex}"
         APP.im = None
-        msg = f"{msg} {err_msg}{f' {path}' if repr(str(path)) not in err_msg else ''}"
+        msg = f"{msg} {err_msg}{f' {path}' if repr(str(path)) not in err_msg and str(path) not in err_msg else ''}"
 
         error_show(msg)
 
