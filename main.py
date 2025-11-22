@@ -32,7 +32,7 @@ from metadata import info_get  # noqa: E402
 
 
 class Fits(enum.IntEnum):
-    """Types of window fitting."""
+    """Window fitting types"""
 
     NONE = 0
     ALL = 1
@@ -77,7 +77,7 @@ register_heif_opener()
 
 
 def log_this(func):
-    """Decorator to log function calls."""
+    """Decorator to log function calls"""
 
     @functools.wraps(func)  # Keep signature.
     def inner(*args, **kwargs):
@@ -88,7 +88,7 @@ def log_this(func):
 
 
 def animation_toggle(event=None):
-    """Toggle animation."""
+    """Animation"""
     APP.b_animate = not APP.b_animate
     if APP.b_animate:
         toast("Starting animation")
@@ -104,16 +104,18 @@ def animation_toggle(event=None):
 
 
 def bind():
-    """Binds input events to functions."""
+    """Bind input events to functions"""
     # APP.bind_all("<Key>", debug_keys)
     for b in BINDS:
         func = b[0]
+        if func == "-":
+            continue
         for event in b[1].split(" "):
             APP.bind(f"<{event}>", func)
 
 
 def browse(event=None, delta: int = 0, pos: Optional[int] = None):
-    """Browse list of paths."""
+    """Browse list of paths"""
     i, _ = browse_get()
     if pos is not None:
         new_index = pos
@@ -140,30 +142,30 @@ def browse(event=None, delta: int = 0, pos: Optional[int] = None):
     im_load()
 
 
-def browse_archive_toggle(event):
-    """Toggle browsing archives."""
+def browse_archive_toggle(event=None):
+    """Browse archives"""
     APP.browse_archives = not APP.browse_archives
     toast(f"Archive browse {APP.browse_archives}")
 
 
 def browse_end(event=None):
-    """Last."""
+    """Last"""
     _, arr = browse_get()
     browse(pos=len(arr) - 1)
 
 
 def browse_home(event=None):
-    """First."""
+    """First"""
     browse(pos=0)
 
 
-def browse_frame(event):
-    """Browse animation frames."""
+def browse_frame(event=None):
+    """Browse animation"""
     if not hasattr(APP.im, "n_frames"):
         toast("No frames")
         return
     n = APP.im.n_frames - 1
-    k = event.keysym
+    k = event.keysym if event else ""
     if k == "comma":
         APP.im_frame -= 1
         if APP.im_frame < 0:
@@ -179,7 +181,7 @@ def browse_frame(event):
 
 
 def browse_get():
-    """Return index and array of files."""
+    """Return index and array of files"""
     if APP.browse_archives and "Names" in APP.info:
         arr = APP.info["Names"]
         i = APP.i_zip
@@ -189,8 +191,8 @@ def browse_get():
     return i, arr
 
 
-def browse_index(event):
-    """Go to index."""
+def browse_index(event=None):  # Context menu lacks event
+    """Index..."""
     i, _ = browse_get()
     i = simpledialog.askinteger("Index", "Where to?", initialvalue=i + 1, parent=APP)
     if not i:
@@ -199,22 +201,22 @@ def browse_index(event):
 
 
 def browse_mouse(event):
-    """Previous/Next."""
+    """Previous/Next"""
     browse(delta=-1 if event.delta > 0 else 1)
 
 
 def browse_next(event=None):
-    """Next."""
+    """Next"""
     browse(delta=1)
 
 
 def browse_prev(event=None):
-    """Previous."""
+    """Previous"""
     browse(delta=-1)
 
 
 def browse_percentage(event):
-    """Shift+1-9 - Go to 10 to 90 percent of the list."""
+    """10 to 90% of list: Shift+1-9"""
     _, arr = browse_get()
     if hasattr(event, "state") and event.state & 1 and event.keycode in range(49, 58):
         ni = int(len(arr) / 10 * (event.keycode - 48))
@@ -222,13 +224,13 @@ def browse_percentage(event):
 
 
 def browse_random(event=None):
-    """Go to random index."""
+    """Random"""
     _, arr = browse_get()
     browse(pos=random.randint(0, len(arr) - 1))
 
 
-def browse_search(event):
-    """Go to next filename matching string."""
+def browse_search(event=None):
+    """Find..."""
     i, arr = browse_get()
 
     s = simpledialog.askstring(
@@ -253,7 +255,7 @@ def browse_search(event):
 
 
 def clipboard_copy(event=None):
-    """Copy info to clipboard."""
+    """Copy"""
     if CANVAS.find_closest(0, 0) == (CANVAS.text_bg,):
         LOG.debug("Copying overlay")
         pyperclip.copy(CANVAS.itemcget(CANVAS.text, "text"))
@@ -283,7 +285,7 @@ def clipboard_copy(event=None):
 
 
 def clipboard_paste(event=None):
-    """Paste image from clipboard."""
+    """Paste"""
     im = ImageGrab.grabclipboard()
     LOG.debug("Pasted %r", im)
     if not im:
@@ -304,7 +306,7 @@ def clipboard_paste(event=None):
 
 
 def paths_set(paths: list):
-    """Change paths."""
+    """Change paths"""
     APP.paths = [pathlib.Path(s) for s in paths]
     LOG.debug("Set paths to %s", APP.paths)
     if not APP.paths:
@@ -319,7 +321,7 @@ def paths_set(paths: list):
 
 @log_this
 def close(event=None):
-    """Close fullscreen or app."""
+    """Close fullscreen or app"""
     if APP.overrideredirect():
         fullscreen_toggle()
     else:
@@ -328,7 +330,7 @@ def close(event=None):
 
 
 def config_save():
-    """Save geometry like IrfanView."""
+    """Save geometry like IrfanView"""
     try:
         with open(CONFIG_FILE, "w+", encoding="utf8") as fp:
             s = fp.read()
@@ -358,11 +360,11 @@ def config_save():
 
 @log_this
 def debug_keys(event=None):
-    """Show all keys."""
+    """Show all keys"""
 
 
 def delete_file(event=None):
-    """Delete file. Bypasses Trash."""
+    """Delete"""
     path = path_get()
     msg = f"Delete? {path}"
     LOG.warning(msg)
@@ -375,7 +377,7 @@ def delete_file(event=None):
 
 
 def drag_begin(event):
-    """Keep drag begin pos for delta move."""
+    """Keep drag begin pos for delta move"""
     if event.widget != CANVAS:
         return
     CANVAS.dragx = CANVAS.canvasx(event.x)
@@ -384,7 +386,7 @@ def drag_begin(event):
 
 
 def drag_end(event):
-    """End drag."""
+    """End drag"""
     if event.widget != CANVAS:
         return
     CANVAS.config(cursor="")
@@ -396,7 +398,7 @@ def drag_end(event):
 
 
 def drag(event):
-    """Drag image."""
+    """Drag image"""
     if event.widget != CANVAS:
         return
 
@@ -424,7 +426,7 @@ def drag(event):
 
 
 def select(event):
-    """Select area."""
+    """Select area"""
     if event.widget != CANVAS:
         return
     lines_toggle(on=True)
@@ -440,7 +442,7 @@ def select(event):
 
 @log_this
 def drop_handler(event):
-    """Handles dropped files."""
+    """Handle dropped files"""
     LOG.debug("Dropped %r", event.data)
     paths_set(
         [
@@ -453,32 +455,34 @@ def drop_handler(event):
 
 
 def error_show(msg: str):
-    """Show error."""
+    """Show error"""
     # Remove old image from help/info overlay.
     im_show(Image.new("1", (1, 1)))
     APP.title(msg + " - " + TITLE)
     if "Press enter" not in msg:
         LOG.error(msg)
-    ERROR_OVERLAY.config(text=msg, fg="yellow" if "Press enter" in msg else "red")
+    ERROR_OVERLAY.config(text=msg, fg="#00FF00" if "Press enter" in msg else "red")
     ERROR_OVERLAY.lift()
     APP.i_path_old = -1  # To refresh image info.
 
 
 def help_toggle(event=None):
-    """Toggle help."""
+    """Help"""
     if APP.showing == "help":
         info_hide()
     else:
         APP.showing = "help"
         lines = []
         for fun, keys in BINDS:
-            if fun in (drag_begin, drag_end, resize_handler):
+            if fun in ("-", drag_begin, drag_end, resize_handler):
                 continue
             lines.append(
-                (
+                fun.__doc__.replace("...", "")
+                + (
                     ""
-                    if " - " in fun.__doc__
-                    else re.sub(
+                    if ": " in fun.__doc__
+                    else ": "
+                    + re.sub(
                         "((^|[+])[a-z])",
                         lambda m: m.group(1).upper(),
                         re.sub(
@@ -496,9 +500,7 @@ def help_toggle(event=None):
                         count=0,
                         flags=re.MULTILINE,
                     )
-                    + " - "
                 )
-                + fun.__doc__.replace("...", "")
             )
         msg = "\n".join(lines)
         info_set(msg)
@@ -507,13 +509,13 @@ def help_toggle(event=None):
 
 
 def info_set(msg: str):
-    """Change info text."""
+    """Change info text"""
     CANVAS.itemconfig(CANVAS.text, text=msg)  # type: ignore
     info_bg_update()
 
 
 def info_bg_update():
-    """Update info overlay."""
+    """Update info overlay"""
     x1, y1, x2, y2 = CANVAS.bbox(CANVAS.text)
     CANVAS.text_bg_tkim = ImageTk.PhotoImage(  # type: ignore
         Image.new("RGBA", (x2 - x1, y2 - y1), "#000a")
@@ -523,7 +525,7 @@ def info_bg_update():
 
 
 def lines_toggle(event=None, on=None, off=None):
-    """Toggle line overlay."""
+    """Line overlay"""
     APP.b_lines = True if on else False if off else not APP.b_lines  # NOSONAR
     if not APP.b_lines and CANVAS.lines:
         for line in CANVAS.lines:
@@ -548,7 +550,7 @@ def lines_toggle(event=None, on=None, off=None):
 
 
 def load_mhtml(path):
-    """Load EML/MHT/MHTML."""
+    """Load EML/MHT/MHTML"""
     with open(path, "r", encoding="utf8") as f:
         mhtml = f.read()
     boundary = re.search('boundary="(.+)"', mhtml).group(1)  # type: ignore
@@ -591,7 +593,7 @@ def load_mhtml(path):
 
 
 def load_svg(fpath):
-    """Load an SVG file."""
+    """Load SVG file"""
     if fpath.suffix == ".svgz":  # NOSONAR
         with gzip.open(fpath, "rt", encoding="utf8") as f:
             data = f.read()
@@ -636,7 +638,7 @@ def load_svg(fpath):
 
 
 def load_zip(path):
-    """Load a zip file."""
+    """Load zip file"""
     with zipfile.ZipFile(path, "r") as zf:
         names = zf.namelist()
         APP.info["Names"] = names
@@ -646,7 +648,7 @@ def load_zip(path):
 
 
 def im_load(path=None):
-    """Load image."""
+    """Load image"""
     path = path_get(path)
     msg = f"{APP.i_path+1}/{len(APP.paths)}"
     LOG.debug("Loading %s %s", msg, path)
@@ -699,7 +701,7 @@ def im_load(path=None):
 
 
 def get_fit_ratio(im_w: int, im_h: int) -> float:
-    """Get fit ratio."""
+    """Get fit ratio"""
     ratio = 1.0
     w = APP.winfo_width()
     h = APP.winfo_height()
@@ -713,7 +715,7 @@ def get_fit_ratio(im_w: int, im_h: int) -> float:
 
 
 def im_fit(im):
-    """Fit image to window."""
+    """Fit image to window"""
     w, h = im.size
     ratio = get_fit_ratio(w, h)
     if ratio != 1.0:  # NOSONAR
@@ -722,7 +724,7 @@ def im_fit(im):
 
 
 def im_scale(im):
-    """Scale image."""
+    """Scale image"""
     im_w, im_h = im.size
     ratio = APP.im_scale * get_fit_ratio(im_w, im_h)
     try:
@@ -742,7 +744,7 @@ def im_scale(im):
 
 
 def im_resize(loop: bool = False):
-    """Resize image."""
+    """Resize image"""
     if not (hasattr(APP, "im") and APP.im):
         return
 
@@ -773,7 +775,7 @@ def im_resize(loop: bool = False):
 
 
 def im_show(im):
-    """Show PIL image in Tk image widget."""
+    """Show PIL image in Tk image widget"""
     try:
         CANVAS.tkim: ImageTk.PhotoImage = ImageTk.PhotoImage(im)  # type: ignore
         CANVAS.itemconfig(CANVAS.image_ref, image=CANVAS.tkim, anchor="center")
@@ -823,7 +825,7 @@ def im_show(im):
 
 
 def info_toggle(event=None, show: bool | None = None):
-    """Toggle info overlay."""
+    """Info"""
     if show or APP.showing != "info":
         APP.showing = "info"
         CANVAS.config(cursor="watch")
@@ -841,7 +843,7 @@ def info_toggle(event=None, show: bool | None = None):
 
 
 def info_show():
-    """Show info overlay."""
+    """Show info overlay"""
     ERROR_OVERLAY.lower()
     CANVAS.lift(CANVAS.text_bg)
     CANVAS.lift(CANVAS.text)
@@ -849,7 +851,7 @@ def info_show():
 
 
 def info_hide():
-    """Hide info overlay."""
+    """Hide info overlay"""
     APP.showing = ""
     info_set("")
     CANVAS.lower(CANVAS.text_bg)
@@ -858,44 +860,60 @@ def info_hide():
 
 
 def menu_init():
-    """Creates the context menu."""
+    """Create context menu"""
     for fun, keys in BINDS:
         if fun in (
-            browse_frame,
-            browse_percentage,
             browse_mouse,
+            browse_next,
+            browse_prev,
+            browse_percentage,
+            close,
             drag,
             drag_begin,
             drag_end,
             menu_show,
+            paths_down,
+            paths_up,
             resize_handler,
             scroll,
+            scroll_toggle,
             select,
             zoom,
             zoom_text,
         ):
             continue
-        lbl = fun.__doc__[:-1].title()
-        if re.match("[a-z]( |$)", keys):
-            MENU.add_command(
-                label=lbl + f" ({keys[0].upper()})", command=fun, underline=len(lbl) - 2
-            )
+
+        if fun == "-":
+            MENU.add_separator()
+            continue
+
+        lbl = str(fun.__doc__).title()
+        if re.match("[a-z0-9]( |$)", keys):
+            uli = lbl.find(keys[0].upper())
+            if uli < 0:
+                uli = lbl.find(keys[0].lower())
+            if uli < 0:
+                lbl += f" [{keys[0].upper()}]"
+                uli = len(lbl) - 2
+            MENU.add_command(label=lbl, command=fun, underline=uli)
         else:
-            MENU.add_command(label=lbl, command=fun)
+            MENU.add_command(
+                label=lbl, command=fun
+            )  # , accelerator=keys) makes menu too wide
 
 
 def menu_show(event):
-    """Show menu."""
+    """Menu"""
     MENU.post(event.x_root, event.y_root)
 
 
 def natural_sort(s: str):
-    """Sort by number and string."""
+    """Sort by number and string"""
     return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", str(s))]
 
 
 def path_get(path: pathlib.Path | None = None) -> pathlib.Path:
-    """Return shown path."""
+    """Return shown path"""
     if path:
         return path
     return APP.paths[max(APP.i_path, 0)]
@@ -903,7 +921,7 @@ def path_get(path: pathlib.Path | None = None) -> pathlib.Path:
 
 @log_this
 def path_open(event=None):
-    """Pick a file to open...."""
+    """Open file..."""
     filename = filedialog.askopenfilename(filetypes=APP.SUPPORTED_FILES_READ)
     if filename:
         paths_update(None, filename)
@@ -911,7 +929,7 @@ def path_open(event=None):
 
 @log_this
 def path_save(event=None, filename=None, newmode=None, noexif=False):
-    """Save file as...."""
+    """Save as..."""
     if "Names" in APP.info:
         p = pathlib.Path(str(path_get()) + "." + APP.info["Names"][APP.i_zip])
     else:
@@ -972,7 +990,7 @@ def path_save(event=None, filename=None, newmode=None, noexif=False):
 
 
 def paths_sort(path=None):
-    """Sort paths."""
+    """Sort paths"""
     LOG.debug("Sorting %s", APP.sort)
     if not APP.paths:
         LOG.error("No paths to sort.")
@@ -1005,7 +1023,7 @@ def paths_sort(path=None):
 
 
 def paths_up(event=None, path=None):
-    """Go to parent path."""
+    """Leave folder"""
     APP.i_path = max(APP.i_path, 0)
     path = path_get(path)
 
@@ -1015,14 +1033,14 @@ def paths_up(event=None, path=None):
 
 
 def paths_down(event=None, path=None):
-    """Go to sub path."""
+    """Enter folder"""
     APP.i_path = max(APP.i_path, 0)
     path = path_get(path)
     paths_update(None, path)
 
 
 def paths_update(event=None, path=None):
-    """Update path info."""
+    """Refresh"""
     path = path_get(path)
     p = pathlib.Path(path)
     if not p.is_dir():
@@ -1040,7 +1058,7 @@ def paths_update(event=None, path=None):
 
 
 def refresh_loop():
-    """Autoupdate paths."""
+    """Autorefresh paths"""
     if APP.update_interval > 0:
         paths_update()
         if hasattr(APP, "path_updater"):
@@ -1049,7 +1067,7 @@ def refresh_loop():
 
 
 def refresh_toggle(event=None):
-    """Toggle autoupdate."""
+    """Autorefresh"""
     APP.update_interval = -APP.update_interval
     if APP.update_interval > 0:
         toast(f"Refreshing every {APP.update_interval/1000:.2}s")
@@ -1059,7 +1077,7 @@ def refresh_toggle(event=None):
 
 
 def resize_handler(event=None):
-    """Handle Tk resize event."""
+    """Handle Tk resize event"""
     new_size = APP.winfo_geometry().split("+", maxsplit=1)[0]
     if APP.s_geo == new_size:
         return
@@ -1084,7 +1102,7 @@ def resize_handler(event=None):
 
 
 def scroll(event):
-    """Scroll."""
+    """Scroll"""
     k = event.keysym
     if k == "Left":
         CANVAS.xview_scroll(-1, "units")
@@ -1099,13 +1117,13 @@ def scroll(event):
 
 @log_this
 def scroll_toggle(event):
-    """Toggle scroll lock."""
+    """Scroll lock"""
     APP.scroll_locked = event.state & 32
     toast(f"Scroll {not APP.scroll_locked}")
 
 
 def scrollbars_set():
-    """Hide/show scrollbars."""
+    """Hide/show scrollbars"""
     win_h = APP.winfo_height()
     win_w = APP.winfo_width()
     try:
@@ -1182,7 +1200,7 @@ def scrollbars_set():
 
 
 def set_bg(event=None):
-    """Set background color."""
+    """Background color"""
     APP.i_bg += 1
     if APP.i_bg >= len(BG_COLORS):
         APP.i_bg = 0
@@ -1205,7 +1223,7 @@ def set_bg(event=None):
 
 @log_this
 def set_order(event=None):
-    """Set order."""
+    """Order"""
     i = SORTS.index(APP.sort) if APP.sort in SORTS else -1
     i = (i + 1) % len(SORTS)
     APP.sort = SORTS[i]
@@ -1216,7 +1234,7 @@ def set_order(event=None):
 
 
 def set_stats(path):
-    """Set stats."""
+    """Set stats"""
     stats = os.stat(path)
     APP.info = {
         # "Path": pathlib.Path(path),
@@ -1233,7 +1251,7 @@ def set_stats(path):
 
 
 def set_supported_files():
-    """Set supported files."""
+    """Set supported files"""
     exts = Image.registered_extensions()
     exts[".eml"] = "MHTML"
     exts[".mht"] = "MHTML"
@@ -1290,7 +1308,7 @@ def set_supported_files():
 
 
 def quality_set(event=None):
-    """Set resize quality."""
+    """Resize quality"""
     i = RESIZE_QUALITY.index(APP.quality)
     i += -1 if event and event.keysym == "Q" else 1
     if i >= len(RESIZE_QUALITY):
@@ -1304,7 +1322,7 @@ def quality_set(event=None):
 
 @log_this
 def set_verbosity(event=None):
-    """Set verbosity."""
+    """Verbosity"""
     APP.verbosity -= 10
     if APP.verbosity < 10:
         APP.verbosity = logging.CRITICAL
@@ -1317,7 +1335,7 @@ def set_verbosity(event=None):
 
 
 def slideshow_run(event=None):
-    """Run slideshow."""
+    """Run slideshow"""
     if APP.b_slideshow:
         try:
             browse(delta=1)
@@ -1327,7 +1345,7 @@ def slideshow_run(event=None):
 
 
 def slideshow_toggle(event=None):
-    """Toggle slideshow."""
+    """Slideshow"""
     APP.b_slideshow = not APP.b_slideshow
     if APP.b_slideshow:
         toast("Starting slideshow")
@@ -1337,7 +1355,7 @@ def slideshow_toggle(event=None):
 
 
 def toast(msg: str, ms: int = 2000, fg="#00FF00"):
-    """Temporarily show a status message."""
+    """Temporarily show a status message"""
     LOG.info("Toast: %s", msg)
     TOAST.config(text=msg, fg=fg)
     TOAST.lift()
@@ -1348,7 +1366,7 @@ def toast(msg: str, ms: int = 2000, fg="#00FF00"):
 
 @log_this
 def transpose_set(event=None):
-    """Transpose image."""
+    """Transpose"""
     APP.transpose_type += -1 if event and event.keysym == "T" else 1
     if APP.transpose_type >= len(Transpose):
         APP.transpose_type = -1
@@ -1364,14 +1382,14 @@ def transpose_set(event=None):
 
 @log_this
 def fit_handler(event=None):
-    """Resize type to fit window."""
+    """Resize"""
     APP.fit = (APP.fit + 1) % len(Fits)
     toast("Resize " + Fits(APP.fit).name)
     im_resize()
 
 
 def fullscreen_toggle(event=None):
-    """Toggle fullscreen."""
+    """Fullscreen"""
     if not APP.overrideredirect():
         APP.old_geometry = APP.geometry()
         APP.old_state = APP.state()
@@ -1399,7 +1417,7 @@ def str2float(s: str) -> float:
 
 
 def zoom(event):
-    """Zoom."""
+    """Zoom"""
     k = event.keysym
     if event.num == 5 or event.delta > 0:
         k = "plus"
@@ -1417,7 +1435,7 @@ def zoom(event):
 
 @log_this
 def zoom_text(event):
-    """Zoom text."""
+    """Zoom text"""
     k = event.keysym
     if event.num == 5 or event.delta > 0:
         k = "plus"
@@ -1447,7 +1465,7 @@ APP.dnd_bind("<<Drop>>", drop_handler)
 APP.showing = ""
 APP.title(TITLE)
 APP.iconphoto(
-    False,
+    True,
     tkinter.PhotoImage(
         data="R0lGODlhgACAAHAAACH5BAEAAAIALAAAAACAAIAAgQAAAP///wAAAAAAAAL/lI+py+0Po5y02ouz3rz7D4biSJbmiabqyrbuC8fyTNf2jef6zvf+DwwKh8Si8YhMKpfMpvMJAkgB0NX0is1eqxyt9+vlTsDkMlbMMKvXUrSADYdD43T5so63G/PXgP8PyDdFlAdoeIiYF0SH2Oh4SOcT90hZ+Re3A2e5aalXM8kZCBAqyvapyVkWihnDuIlaGelSRxrAFitr5Vp7S1mnC1rr1/v4i4InXGrma0yy7JVsSNwIbTaiOqwVrbzsCJ0NFoJtq719CZtYTh7uMb6OZX4+Dan+HtZFJl2/vUufpc8ugzt7faitCubvHzctAsGkU2gwFcKEBQHes+DwITxq/1Je0eII0SLDChk1VvTnsZ/IKd6+kPxSbJ8yXB9Nsmx5EUJJkBtNxkTG86TNLTphMgu5clRSlfJ64hzZIN9Rp0sFyQRHdSjRNEanCl1o9RvFm17PcBVbtmPQsFexfl27FcHOtEq1siU7Vm0nl3K77kUK9i7epQdz+v2btangxG4H08zSt+3Tt4oX681bNyVkA4cRU268+Cdj0WbRFh5tGbVkupxXk3YcmO1k2J4HvXE9+zLmsK91S9xs+jfg2Hx6+9ZMtDNy2pWtGk/G9zZuu8YL5T7+2Gzr6Vrp1oSb+bR26dyrekdHnVf07eWbY6+qJvvn620UzK3NnPj99OLHJ7TYX1149HEH4IAOSCXccAMKOCApZDxQYIPxJDiagUUFdx6DE+72Hnj1RRChXR1uiOBycYGoXIAakhgihxe0CN+Iwgwkn38SlIhfherBqF9DPIKmYH/tlbEBjSrO52GQIn6ogZELKglkikkyWSSOGaa24pJURGHllYIJaWMH3ZhoGZhhfuDkk9ZRuNkJY5K5JpwnmvCmnPPkeGYJ8e2Inp22tbAGP1Li2eYLgW5ozhqn7Imog4ph3nBno1PmKcNEkka5ng5MxZOLJEBBhwchvGn56B5YCsLEqc00oWqpXLSakxvsnSorhJbVilGouIow566+/gpssMIOS2yxxh6LbLLKLstss84+C2200k5LbbXWXotttgIUAAA7"
     ),
@@ -1515,54 +1533,56 @@ ERROR_OVERLAY.place(x=0, y=0, relwidth=1, relheight=1)
 MENU = tkinter.Menu(APP, tearoff=0)
 
 BINDS = [
-    (animation_toggle, "a"),
+    (path_open, "p F2"),
+    (clipboard_copy, "Control-c Control-Insert"),
+    (clipboard_paste, "Control-v Shift-Insert"),
+    (path_save, "s F12"),
+    (delete_file, "d Delete"),
+    "--",
+    (browse_search, "F3"),
+    (paths_update, "u F5"),
+    (refresh_toggle, "U"),
+    (set_order, "o"),
     (slideshow_toggle, "b Pause"),
-    (set_bg, "c"),
-    (fullscreen_toggle, "f F11 Alt-Return"),
-    (close, "Escape"),
-    (help_toggle, "h F1"),
-    (info_toggle, "i"),
+    (browse_archive_toggle, "z"),
+    (animation_toggle, "a"),
     (browse_frame, "comma period"),
-    (scroll, "Control-Left Control-Right Control-Up Control-Down"),
-    (scroll_toggle, "Scroll_Lock"),
-    (zoom, "Control-MouseWheel minus plus equal 0"),
-    (quality_set, "q Q"),
-    (fit_handler, "r"),
-    (transpose_set, "t T"),
-    (zoom_text, "Alt-MouseWheel Alt-minus Alt-plus Alt-equal"),
     (browse_mouse, "MouseWheel"),
     (browse_next, "Right Down Next space Button-5"),
     (browse_prev, "Left Up Prior Button-4"),
-    (paths_down, "Return"),
-    (paths_up, "BackSpace"),
-    (browse_end, "End Alt-Right"),
     (browse_home, "Key-1 Home Alt-Left"),
-    (browse_search, "F3"),
+    (browse_end, "End Alt-Right"),
     (browse_index, "g F4"),
     (browse_percentage, "Key"),
     (browse_random, "x"),
-    (browse_archive_toggle, "z"),
-    (set_order, "o"),
-    (delete_file, "d Delete"),
-    (path_open, "p F2"),
-    (path_save, "s F12"),
-    (paths_update, "u F5"),
-    (refresh_toggle, "U"),
-    (clipboard_copy, "Control-c Control-Insert"),
-    (clipboard_paste, "Control-v Shift-Insert"),
-    (set_verbosity, "v"),
+    (paths_down, "Return"),
+    (paths_up, "BackSpace"),
+    "--",
+    (fullscreen_toggle, "f F11 Alt-Return"),
+    (close, "Escape"),
+    (zoom_text, "Alt-equal Alt-plus Alt-minus Alt-MouseWheel"),
+    (zoom, "0 equal plus minus Control-MouseWheel"),
     (drag, "B1-Motion"),
+    (scroll, "Control-Left Control-Right Control-Up Control-Down"),
+    (scroll_toggle, "Scroll_Lock"),
     (select, "B2-Motion"),
     (drag_begin, "ButtonPress"),
     (drag_end, "ButtonRelease"),
-    (menu_show, "Button-3 F10"),  # Or rather tk_popup in Ubuntu?
-    (lines_toggle, "l"),
+    (fit_handler, "r"),
     (resize_handler, "Configure"),
+    (quality_set, "q Q"),
+    (set_bg, "c"),
+    (transpose_set, "t T"),
+    (lines_toggle, "l"),
+    (set_verbosity, "v"),
+    (menu_show, "Button-3 F10"),  # Or rather tk_popup in Ubuntu?
+    (help_toggle, "h F1"),
+    (info_toggle, "i"),
 ]
 
 
 def main():
-    """Main function."""
+    """Main function"""
     APP.b_animate = True
     APP.b_lines = False
     APP.b_slideshow = False
@@ -1662,11 +1682,12 @@ def main():
 
     args = parser.parse_args(namespace=parsed_args)
 
+    APP.verbosity = logging.CRITICAL
     if args.verbose:
         APP.verbosity = VERBOSITY_LEVELS[
             min(len(VERBOSITY_LEVELS) - 1, 1 + args.verbose)
         ]
-        set_verbosity()
+    set_verbosity()
 
     LOG.debug("Args: %s", args)
     APP.paths = []
