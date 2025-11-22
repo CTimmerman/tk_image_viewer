@@ -1,3 +1,4 @@
+defusedxml  # PIL\Image.py:1496: UserWarning: XMP data cannot be read without defusedxml dependency
 pillow
 pillow-avif-plugin
 pillow-heif
