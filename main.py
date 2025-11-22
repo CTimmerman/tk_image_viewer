@@ -216,9 +216,9 @@ def browse_prev(event=None):
 
 
 def browse_percentage(event):
-    """10 to 90% of list: Shift+1-9"""
+    """0 to 90% of list: Shift+0-9"""
     _, arr = browse_get()
-    if hasattr(event, "state") and event.state & 1 and event.keycode in range(49, 58):
+    if hasattr(event, "state") and event.state & 1 and event.keycode in range(48, 58):
         ni = int(len(arr) / 10 * (event.keycode - 48))
         browse(pos=ni)
 
@@ -819,8 +819,6 @@ def im_show(im):
         CANVAS.config(cursor="watch")
         info_set(msg + info_get(APP.im, APP.info, path_get()))
         CANVAS.config(cursor="")
-    else:
-        info_set("")
     scrollbars_set()
 
 
