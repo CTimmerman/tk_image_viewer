@@ -305,7 +305,7 @@ def clipboard_paste(event=None):
     im_resize()
 
 
-def paths_set(paths: list):
+def paths_set(paths: list | tuple):
     """Change paths"""
     APP.paths = [pathlib.Path(s) for s in paths]
     LOG.debug("Set paths to %s", APP.paths)
@@ -369,7 +369,11 @@ def delete_file(event=None):
     msg = f"Delete? {path}"
     LOG.warning(msg)
     if messagebox.askokcancel(
-        "Delete File", f"Permanently delete {path}?", icon=messagebox.WARNING
+        "Delete File",
+        f"Permanently delete {path}?",
+        default="cancel",
+        icon=messagebox.WARNING,
+        parent=APP,
     ):
         LOG.warning("Deleting %s", path)
         os.remove(path)
@@ -919,10 +923,10 @@ def path_get(path: pathlib.Path | None = None) -> pathlib.Path:
 
 @log_this
 def path_open(event=None):
-    """Open file..."""
-    filename = filedialog.askopenfilename(filetypes=APP.SUPPORTED_FILES_READ)
-    if filename:
-        paths_update(None, filename)
+    """Open file(s)..."""
+    filenames = filedialog.askopenfilenames(filetypes=APP.SUPPORTED_FILES_READ)
+    if filenames:
+        paths_set(filenames)
 
 
 @log_this
@@ -952,6 +956,7 @@ def path_save(event=None, filename=None, newmode=None, noexif=False):
             "Lose Frames",
             f"Can only store one frame in {fmt}. Ignore the rest?",
             icon=messagebox.WARNING,
+            parent=APP,
         ):
             return
         save_all = False
@@ -977,7 +982,7 @@ def path_save(event=None, filename=None, newmode=None, noexif=False):
         if str(
             ex
         ) == "EXIF data is too long" and messagebox.askokcancel(  # From Pillow 9.5.0 (2023-04-01)
-            "Lose EXIF", f"{ex}. Retry without it?", icon=messagebox.WARNING
+            "Lose EXIF", f"{ex}. Retry without it?", icon=messagebox.WARNING, parent=APP
         ):
             path_save(filename=filename, newmode=newmode, noexif=True)
             return

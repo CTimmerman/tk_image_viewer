@@ -45,44 +45,44 @@ options:
 Binds:
 
 ```pre
-A - Toggle animation.
-B Pause - Toggle slideshow.
-C - Set background color.
-F F11 Alt+Return - Toggle fullscreen.
-Escape - Close fullscreen or app.
-H F1 - Toggle help.
-I - Toggle info overlay.
-Comma period - Browse animation frames.
-Ctrl+Left Ctrl+Right Ctrl+Up Ctrl+Down - Scroll.
-Scroll_Lock - Toggle scroll lock.
-Ctrl+Wheel minus plus equal 0 - Zoom.
-Q Shift+Q - Set resize quality.
-R - Resize type to fit window.
-T Shift+T - Transpose image.
-Alt+Wheel Alt+Minus Alt+Plus Alt+Equal - Zoom text.
-Wheel - Previous/Next.
-Right Down PageDown space B5 - Next.
-Left Up PageUp B4 - Previous.
-Return - Go to sub path.
-BackSpace - Go to parent path.
-End Alt+Right - Last.
-1 Home Alt+Left - First.
-F3 - Go to next filename matching string.
-G F4 - Go to index.
-Shift+1-9 - Go to 10 to 90 percent of the list.
-X - Go to random index.
-Z - Toggle browsing archives.
-O - Set order.
-D Delete - Delete file. Bypasses Trash.
-P F2 - Pick a file to open.
-S F12 - Save file as.
-U F5 - Update path info.
-Shift+U - Toggle autoupdate.
-Ctrl+C Ctrl+Insert - Copy info to clipboard.
-Ctrl+V Shift+Insert - Paste image from clipboard.
-V - Set verbosity.
-B1-Motion - Drag image.
-B2-Motion - Select area.
-B3 F10 - Show menu.
-L - Toggle line overlay.
+Open file(s): P F2
+Copy: Ctrl+C Ctrl+Insert
+Paste: Ctrl+V Shift+Insert
+Save as: S F12
+Delete: D Delete
+Find: F3
+Refresh: U F5
+Autorefresh: Shift+U
+Order: O
+Slideshow: B Pause
+Browse archives: Z
+Animation: A
+Browse animation: Comma period
+Previous/Next: Wheel
+Next: Right Down PageDown space B5
+Previous: Left Up PageUp B4
+First: 1 Home Alt+Left
+Last: End Alt+Right
+Index: G F4
+0 to 90% of list: Shift+0-9
+Random: X
+Enter folder: Return
+Leave folder: BackSpace
+Fullscreen: F F11 Alt+Return
+Close fullscreen or app: Escape
+Zoom text: Alt+Equal Alt+Plus Alt+Minus Alt+Wheel
+Zoom: 0 equal plus minus Ctrl+Wheel
+Drag image: B1-Motion
+Scroll: Ctrl+Left Ctrl+Right Ctrl+Up Ctrl+Down
+Scroll lock: Scroll_Lock
+Select area: B2-Motion
+Resize: R
+Resize quality: Q Shift+Q
+Background color: C
+Transpose: T Shift+T
+Line overlay: L
+Verbosity: V
+Menu: B3 F10
+Help: H F1
+Info: I
 ```
