@@ -1,15 +1,10 @@
 repos:
 - repo: local
   hooks:
-    - id: black
-      name: black
-      entry: python -m black --check .
-      pass_filenames: false
-      language: system  # Don't create venv.
-    - id: pylint
-      name: pylint
-      entry: pylint
-      language: system
+    - id: check
+      name: check
+      entry: hooks/check.py
+      language: system  # Uses active environment, but not the venv in VS Code.
       types: [python]
       args:
         [
