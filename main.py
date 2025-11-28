@@ -669,18 +669,19 @@ def im_load(path=None):
                 load_mhtml(path)
             else:
                 APP.im = Image.open(path)
+        APP.info.update(**APP.im.info)
         APP.im_frame = 0
         if hasattr(APP.im, "n_frames"):
-            APP.info["Frames"] = APP.im.n_frames
-            if APP.b_animate and APP.im.n_frames > 1:
+            n = APP.im.n_frames
+            APP.info["Frames"] = n
+            duration = 0
+            for frame in range(n):
+                APP.im.seek(frame)
+                duration += APP.im.info.get("duration", 100)
+            APP.info["duration"] = f"{duration} ms"
+            APP.im.seek(0)
+            if n > 1 and APP.b_animate:
                 APP.im_frame = -1  # Animation increments before displaying.
-        APP.info.update(**APP.im.info)
-        # for k, v in APP.info.items():
-        #     LOG.debug(
-        #         "%s: %s",
-        #         k,
-        #         str(v)[:80] + "..." if len(str(v)) > 80 else v,
-        #     )
         im_resize(APP.b_animate)
     # pylint: disable=W0718
     except (
@@ -759,9 +760,7 @@ def im_resize(loop: bool = False):
         except EOFError as ex:
             LOG.error("IMAGE EOF. %s", ex)
         # 10 FPS default; nice and round.
-        duration = (
-            int(APP.im.info["duration"] or 100) if "duration" in APP.im.info else 100
-        )
+        duration = APP.im.info.get("duration", 100)
         # Cancel existing timer.
         if hasattr(APP, "animation"):
             APP.after_cancel(APP.animation)
