@@ -69,7 +69,7 @@ Random: X
 Enter folder: Return
 Leave folder: BackSpace
 Fullscreen: F F11 Alt+Return
-Close fullscreen or app: Escape
+Exit fullscreen or app: Escape
 Zoom text: Alt+Equal Alt+Plus Alt+Minus Alt+Wheel
 Zoom: 0 equal plus minus Ctrl+Wheel
 Drag image: B1-Motion

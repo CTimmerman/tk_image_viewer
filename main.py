@@ -321,7 +321,7 @@ def paths_set(paths: list | tuple):
 
 @log_this
 def close(event=None):
-    """Close fullscreen or app"""
+    """Exit fullscreen or app"""
     if APP.overrideredirect():
         fullscreen_toggle()
     else:
