@@ -164,20 +164,20 @@ def browse_frame(event=None):
     if not hasattr(APP.im, "n_frames"):
         toast("No frames")
         return
-    n = APP.im.n_frames - 1
+    last = APP.im.n_frames - 1
     k = event.keysym if event else ""
     if k == "comma":
         APP.im_frame -= 1
         if APP.im_frame < 0:
-            APP.im_frame = n
+            APP.im_frame = last
     else:
         APP.im_frame += 1
-        if APP.im_frame > n:
+        if APP.im_frame > last:
             APP.im_frame = 0
 
     APP.im.seek(APP.im_frame)
     im_resize()
-    toast(f"Frame {1 + APP.im_frame}/{1 + n}", 1000)
+    toast(f"Frame {1 + APP.im_frame}/{1 + last}", 1000)
 
 
 def browse_get():
@@ -672,6 +672,8 @@ def im_load(path=None):
         APP.im_frame = 0
         if hasattr(APP.im, "n_frames"):
             APP.info["Frames"] = APP.im.n_frames
+            if APP.b_animate and APP.im.n_frames > 1:
+                APP.im_frame = -1  # Animation increments before displaying.
         APP.info.update(**APP.im.info)
         # for k, v in APP.info.items():
         #     LOG.debug(
@@ -680,8 +682,6 @@ def im_load(path=None):
         #         str(v)[:80] + "..." if len(str(v)) > 80 else v,
         #     )
         im_resize(APP.b_animate)
-        # if APP.showing not in ("", "help"):
-        #     info_toggle(None, True)
     # pylint: disable=W0718
     except (
         tkinter.TclError,
@@ -752,6 +752,22 @@ def im_resize(loop: bool = False):
     if not (hasattr(APP, "im") and APP.im):
         return
 
+    if loop and APP.info.get("Frames", 1) > 1:
+        APP.im_frame = (APP.im_frame + 1) % APP.im.n_frames
+        try:
+            APP.im.seek(APP.im_frame)
+        except EOFError as ex:
+            LOG.error("IMAGE EOF. %s", ex)
+        # 10 FPS default; nice and round.
+        duration = (
+            int(APP.im.info["duration"] or 100) if "duration" in APP.im.info else 100
+        )
+        # Cancel existing timer.
+        if hasattr(APP, "animation"):
+            APP.after_cancel(APP.animation)
+        # Set new timer.
+        APP.animation = APP.after(duration, im_resize, APP.b_animate)
+
     im = APP.im.copy()  # Loses im.format!
 
     if APP.fit:
@@ -765,17 +781,6 @@ def im_resize(loop: bool = False):
         im = im.transpose(APP.transpose_type)
 
     im_show(im)
-
-    if loop and hasattr(APP.im, "n_frames") and APP.im.n_frames > 1:
-        APP.im_frame = (APP.im_frame + 1) % APP.im.n_frames
-        try:
-            APP.im.seek(APP.im_frame)
-        except EOFError as ex:
-            LOG.error("IMAGE EOF. %s", ex)
-        duration = int(APP.info["duration"] or 100) if "duration" in APP.info else 100
-        if hasattr(APP, "animation"):
-            APP.after_cancel(APP.animation)
-        APP.animation = APP.after(duration, im_resize, APP.b_animate)
 
 
 def im_show(im):
