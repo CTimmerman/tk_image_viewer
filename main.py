@@ -20,15 +20,20 @@ from typing import Optional
 import pillow_avif  # type: ignore  # noqa: F401  # pylint: disable=E0401
 import pillow_jxl  # noqa: F401
 import pyperclip  # type: ignore
-from PIL import Image, ImageGrab, ImageTk
+from PIL import GifImagePlugin, Image, ImageGrab, ImageTk
 from PIL.Image import Transpose
 from pillow_heif import register_heif_opener  # type: ignore
 from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
+
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 import pygame  # noqa: E402
 
 from metadata import info_get  # noqa: E402
+
+GifImagePlugin.LOADING_STRATEGY = (
+    GifImagePlugin.LoadingStrategy.RGB_AFTER_DIFFERENT_PALETTE_ONLY
+)
 
 
 class Fits(enum.IntEnum):
@@ -669,19 +674,20 @@ def im_load(path=None):
                 load_mhtml(path)
             else:
                 APP.im = Image.open(path)
+                APP.im.load()  # Else im.info = {} for AVIF.
         APP.info.update(**APP.im.info)
         APP.im_frame = 0
         if hasattr(APP.im, "n_frames"):
             n = APP.im.n_frames
-            APP.info["Frames"] = n
-            duration = 0
-            for frame in range(n):
-                APP.im.seek(frame)
-                duration += APP.im.info.get("duration", 100)
-            APP.info["duration"] = f"{duration} ms"
-            APP.im.seek(0)
-            if n > 1 and APP.b_animate:
-                APP.im_frame = -1  # Animation increments before displaying.
+            if n > 1:
+                APP.info["Frames"] = n
+                duration = 0
+                for frame in range(n - 1, -1, -1):
+                    APP.im.seek(frame)
+                    duration += APP.im.info.get("duration", 100) or 100
+                APP.info["duration"] = f"{duration} ms"
+                if APP.b_animate:
+                    APP.im_frame = -1  # Animation increments before displaying.
         im_resize(APP.b_animate)
     # pylint: disable=W0718
     except (
@@ -760,7 +766,7 @@ def im_resize(loop: bool = False):
         except EOFError as ex:
             LOG.error("IMAGE EOF. %s", ex)
         # 10 FPS default; nice and round.
-        duration = APP.im.info.get("duration", 100)
+        duration = APP.im.info.get("duration", 100) or 100
         # Cancel existing timer.
         if hasattr(APP, "animation"):
             APP.after_cancel(APP.animation)
@@ -968,7 +974,9 @@ def path_save(event=None, filename=None, newmode=None, noexif=False):
         im_info = im.info.copy()
         if noexif:
             del im_info["exif"]
-        # print("XXX Saving", im_info)
+
+        del im_info["duration"]  # Only contains one frame.
+        # print("XXX: Saving", im_info)
         im.save(
             filename,
             None,  # Let Pillow handle ".jfif" -> JPEG
