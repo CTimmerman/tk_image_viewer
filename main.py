@@ -920,8 +920,15 @@ def menu_show(event):
 
 
 def natural_sort(s: str):
-    """Sort by number and string"""
-    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", str(s))]
+    """Sort by number and string
+    >>> a = ['koko2.gif', 'koko 0004.gif', r'koko.gif']
+    >>> a.sort(key=natural_sort); a
+    ['koko.gif', 'koko2.gif', 'koko 0004.gif']
+    """
+    return [
+        -1 if t == "." else int(t) if t.isdigit() else t.lower()
+        for t in re.split(r"(\d+|[.])", str(s))
+    ]
 
 
 def path_get(path: pathlib.Path | None = None) -> pathlib.Path:
