@@ -4,6 +4,7 @@ import subprocess
 from time import strftime
 
 timestamp = strftime("%y%j")  # max 5 digits for Nuitka.
+VERSION = f"1.0.1.{timestamp}"
 
 # ============================ MyPyC =================================
 # mypyc main.py
@@ -30,8 +31,8 @@ subprocess.run(
         "--remove-output",
         "--deployment",
         "--product-name=Tk Image Viewer",
-        f"--product-version=1.0.{timestamp}",
-        f"--file-version=1.0.{timestamp}",
+        f"--product-version={VERSION}",
+        f"--file-version={VERSION}",
         "--file-description=Image viewer with a Tk GUI.",
         f'--copyright=2024-{strftime("%Y")} Cees Timmerman',
     ],
@@ -59,7 +60,7 @@ subprocess.run(
 
 # setup(
 #     name="Tk Image Viewer",
-#     version=f"1.0.0.{timestamp}",
+#     version=f"{VERSION}",
 #     description="Image viewer with a Tk GUI.",
 #     options=options,
 #     executables=executables
