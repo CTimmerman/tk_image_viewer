@@ -646,10 +646,20 @@ def load_svg(fpath):
     APP.im = Image.open(bf)
 
 
+def has_supported_extension(name: str):
+    """To filter files"""
+    for ext in APP.SUPPORTED_EXTENSIONS:
+        if name.endswith(ext):
+            return True
+    return False
+
+
 def load_zip(path):
     """Load zip file"""
     with zipfile.ZipFile(path, "r") as zf:
         names = zf.namelist()
+        if APP.filter_names:
+            names = list(filter(has_supported_extension, names))
         APP.info["Names"] = names
         LOG.debug("Loading name index %s", APP.i_zip)
         # pylint: disable=consider-using-with
@@ -682,9 +692,11 @@ def im_load(path=None):
             if n > 1:
                 APP.info["Frames"] = n
                 duration = 0
-                for frame in range(n - 1, -1, -1):
+                # for frame in range(n - 1, -1, -1):  # 116 GIF frames in 15.45s vs 0.21s!
+                for frame in range(n):
                     APP.im.seek(frame)
                     duration += APP.im.info.get("duration", 100) or 100
+                APP.im.seek(0)
                 APP.info["duration"] = f"{duration} ms"
                 if APP.b_animate:
                     APP.im_frame = -1  # Animation increments before displaying.
@@ -1011,7 +1023,7 @@ def path_save(event=None, filename=None, newmode=None, noexif=False):
         raise
 
 
-def paths_sort(path=None):
+def paths_sort(path=None, reverse=False):
     """Sort paths"""
     LOG.debug("Sorting %s", APP.sort)
     if not APP.paths:
@@ -1021,17 +1033,17 @@ def paths_sort(path=None):
 
     for s in APP.sort.split(","):
         if s == "natural":
-            APP.paths.sort(key=natural_sort)
+            APP.paths.sort(key=natural_sort, reverse=reverse)
         elif s == "ctime":
-            APP.paths.sort(key=os.path.getmtime)
+            APP.paths.sort(key=os.path.getmtime, reverse=reverse)
         elif s == "mtime":
-            APP.paths.sort(key=os.path.getmtime)
+            APP.paths.sort(key=os.path.getmtime, reverse=reverse)
         elif s == "random":
             random.shuffle(APP.paths)
         elif s == "size":
-            APP.paths.sort(key=os.path.getsize)
+            APP.paths.sort(key=os.path.getsize, reverse=reverse)
         elif s == "string":
-            APP.paths.sort()
+            APP.paths.sort(reverse=reverse)
 
     try:
         APP.i_path = APP.paths.index(pathlib.Path(path))
@@ -1074,7 +1086,7 @@ def paths_update(event=None, path=None):
         APP.i_path = 0
         LOG.debug("Found %s files.", len(APP.paths))
         # LOG.debug("Filter?")
-        paths_sort(path)
+        paths_sort(path, reverse=APP.reverse)
     else:
         toast("Folder empty")
 
@@ -1246,13 +1258,14 @@ def set_bg(event=None):
 @log_this
 def set_order(event=None):
     """Order"""
+    APP.reverse = False or (event and event.keysym == "O")
     i = SORTS.index(APP.sort) if APP.sort in SORTS else -1
     i = (i + 1) % len(SORTS)
     APP.sort = SORTS[i]
-    s = "Sort: " + APP.sort
+    s = "Sort: " + APP.sort + " reverse" if APP.reverse else ""
     LOG.info(s)
     toast(s)
-    paths_sort()
+    paths_sort(reverse=APP.reverse)  # type:ignore
 
 
 def set_stats(path):
@@ -1283,6 +1296,9 @@ def set_supported_files():
     exts[".zip"] = "ZIP"
     added_exts = ["EML", "MHT", "MHTML", "SVG", "SVGZ", "ZIP"]
 
+    APP.SUPPORTED_EXTENSIONS = sorted(
+        [k[1:].upper() for k, v in exts.items() if v in Image.OPEN] + added_exts
+    )
     type_exts = {}
     for k, v in exts.items():
         type_exts.setdefault(v, []).append(k)
@@ -1311,11 +1327,7 @@ def set_supported_files():
     LOG.debug("Supports %s", ", ".join(s[1:].upper() for s in sorted(list(exts))))
     LOG.debug(
         "Open: %s",
-        ", ".join(
-            sorted(
-                [k[1:].upper() for k, v in exts.items() if v in Image.OPEN] + added_exts
-            )
-        ),
+        ", ".join(APP.SUPPORTED_EXTENSIONS),
     )
     LOG.debug(
         "Save: %s",
@@ -1615,6 +1627,7 @@ def main():
     APP.im_scale = 1.0
     APP.info = {}
     APP.f_text_scale = 1.0
+    APP.reverse = False
     APP.s_geo = ""
     APP.scroll_locked = True
     APP.transpose_type = -1
