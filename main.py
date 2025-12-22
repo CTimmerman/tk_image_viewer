@@ -468,11 +468,13 @@ def error_show(msg: str):
     # Remove old image from help/info overlay.
     im_show(Image.new("1", (1, 1)))
     APP.title(msg + " - " + TITLE)
-    if "Press enter" not in msg:
-        LOG.error(msg)
     ERROR_OVERLAY.config(text=msg, fg="#00FF00" if "Press enter" in msg else "red")
     ERROR_OVERLAY.lift()
     APP.i_path_old = -1  # To refresh image info.
+    if "Press enter" not in msg:
+        LOG.error(msg)
+        if LOG.level == logging.DEBUG:
+            raise ValueError(msg)
 
 
 def help_toggle(event=None):
@@ -646,22 +648,29 @@ def load_svg(fpath):
     APP.im = Image.open(bf)
 
 
-def has_supported_extension(name: str):
-    """To filter files"""
+def has_supported_extension(name: str | pathlib.Path):
+    """To skip unsupported files"""
+    if str(name).startswith("__MACOSX"):
+        return False
+    if isinstance(name, pathlib.Path) and name.is_dir(follow_symlinks=True):
+        return True
     for ext in APP.SUPPORTED_EXTENSIONS:
-        if name.endswith(ext):
+        if str(name).upper().endswith(ext):
             return True
     return False
 
 
 def load_zip(path):
-    """Load zip file"""
+    """Load file from zip"""
     with zipfile.ZipFile(path, "r") as zf:
         names = zf.namelist()
         if APP.filter_names:
             names = list(filter(has_supported_extension, names))
         APP.info["Names"] = names
-        LOG.debug("Loading name index %s", APP.i_zip)
+        if len(names) == 0:
+            APP.im = None
+            return
+        LOG.debug("Loading zip index %s", APP.i_zip)
         # pylint: disable=consider-using-with
         APP.im = Image.open(zf.open(names[APP.i_zip]))
 
@@ -824,11 +833,14 @@ def im_show(im):
         APP.im_scale = max(SCALE_MIN, min(APP.im_scale * 0.9, SCALE_MAX))
         return
 
-    zip_info = (
-        f" {APP.i_zip + 1}/{len(APP.info['Names'])} {APP.info['Names'][APP.i_zip]}"
-        if "Names" in APP.info
-        else ""
-    )
+    zip_info = ""
+    if "Names" in APP.info and len(APP.info["Names"]):
+        if APP.i_zip > len(APP.info["Names"]):
+            APP.i_zip = 0
+        zip_info = (
+            f" {APP.i_zip + 1}/{len(APP.info['Names'])} {APP.info['Names'][APP.i_zip]}"
+        )
+
     msg = (
         f"{APP.i_path+1}/{len(APP.paths)}{zip_info} {('%sx%s' % APP.im.size) if APP.im else ''}"
         f" @ {'%sx%s' % im.size} {path_get()}"
@@ -1080,7 +1092,7 @@ def paths_update(event=None, path=None):
     if not p.is_dir():
         p = p.parent
     LOG.debug("Reading %s", p)
-    paths = list(p.glob("*"))
+    paths = list(filter(has_supported_extension, p.glob("*")))
     if paths:
         APP.paths = paths
         APP.i_path = 0
@@ -1105,7 +1117,7 @@ def refresh_toggle(event=None):
     APP.update_interval = -APP.update_interval
     if APP.update_interval > 0:
         toast(f"Refreshing every {APP.update_interval/1000:.2}s")
-        refresh_loop()
+        APP.after(1000, refresh_loop)
     else:
         toast("Refresh off")
 
@@ -1258,11 +1270,14 @@ def set_bg(event=None):
 @log_this
 def set_order(event=None):
     """Order"""
-    APP.reverse = False or (event and event.keysym == "O")
-    i = SORTS.index(APP.sort) if APP.sort in SORTS else -1
-    i = (i + 1) % len(SORTS)
-    APP.sort = SORTS[i]
-    s = "Sort: " + APP.sort + " reverse" if APP.reverse else ""
+    APP.reverse = False
+    if event and event.keysym == "O":
+        APP.reverse = True
+    else:
+        i = SORTS.index(APP.sort) if APP.sort in SORTS else -1
+        i = (i + 1) % len(SORTS)
+        APP.sort = SORTS[i]
+    s = "Sort: " + APP.sort + (" reverse" if APP.reverse else "")
     LOG.info(s)
     toast(s)
     paths_sort(reverse=APP.reverse)  # type:ignore
@@ -1357,9 +1372,12 @@ def quality_set(event=None):
 @log_this
 def set_verbosity(event=None):
     """Verbosity"""
-    APP.verbosity -= 10
-    if APP.verbosity < 10:
+    delta = 10 if event and event.keysym == "V" else -10
+    APP.verbosity += delta
+    if APP.verbosity < logging.DEBUG:
         APP.verbosity = logging.CRITICAL
+    if APP.verbosity > logging.CRITICAL:
+        APP.verbosity = logging.DEBUG
 
     logging.basicConfig(level=APP.verbosity)  # Show up in nested shells in Windows 11.
     LOG.setLevel(APP.verbosity)
@@ -1567,32 +1585,32 @@ ERROR_OVERLAY.place(x=0, y=0, relwidth=1, relheight=1)
 MENU = tkinter.Menu(APP, tearoff=0)
 
 BINDS = [
-    (path_open, "p F2"),
+    (path_open, "p P F2"),
     (clipboard_copy, "Control-c Control-Insert"),
     (clipboard_paste, "Control-v Shift-Insert"),
-    (path_save, "s F12"),
-    (delete_file, "d Delete"),
+    (path_save, "s S F12"),
+    (delete_file, "d D Delete"),
     "--",
     (browse_search, "F3"),
     (paths_update, "u F5"),
     (refresh_toggle, "U"),
-    (set_order, "o"),
+    (set_order, "o O"),
     (slideshow_toggle, "b Pause"),
     (browse_archive_toggle, "z"),
-    (animation_toggle, "a"),
+    (animation_toggle, "a A"),
     (browse_frame, "comma period"),
     (browse_mouse, "MouseWheel"),
     (browse_next, "Right Down Next space Button-5"),
     (browse_prev, "Left Up Prior Button-4"),
     (browse_home, "Key-1 Home Alt-Left"),
     (browse_end, "End Alt-Right"),
-    (browse_index, "g F4"),
+    (browse_index, "g G F4"),
     (browse_percentage, "Key"),
-    (browse_random, "x"),
+    (browse_random, "x X"),
     (paths_down, "Return"),
     (paths_up, "BackSpace"),
     "--",
-    (fullscreen_toggle, "f F11 Alt-Return"),
+    (fullscreen_toggle, "f F F11 Alt-Return"),
     (close, "Escape"),
     (zoom_text, "Alt-equal Alt-plus Alt-minus Alt-MouseWheel"),
     (zoom, "0 equal plus minus Control-MouseWheel"),
@@ -1602,16 +1620,16 @@ BINDS = [
     (select, "B2-Motion"),
     (drag_begin, "ButtonPress"),
     (drag_end, "ButtonRelease"),
-    (fit_handler, "r"),
+    (fit_handler, "r R"),
     (resize_handler, "Configure"),
     (quality_set, "q Q"),
-    (set_bg, "c"),
+    (set_bg, "c C"),
     (transpose_set, "t T"),
-    (lines_toggle, "l"),
-    (set_verbosity, "v"),
+    (lines_toggle, "l L"),
+    (set_verbosity, "v V"),
     (menu_show, "Button-3 F10"),  # Or rather tk_popup in Ubuntu?
-    (help_toggle, "h F1"),
-    (info_toggle, "i"),
+    (help_toggle, "h H F1"),
+    (info_toggle, "i I"),
 ]
 
 
@@ -1627,6 +1645,7 @@ def main():
     APP.im_scale = 1.0
     APP.info = {}
     APP.f_text_scale = 1.0
+    APP.filter_names = True
     APP.reverse = False
     APP.s_geo = ""
     APP.scroll_locked = True
