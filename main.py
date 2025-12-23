@@ -437,13 +437,21 @@ def drag(event):
 @log_this
 def select(event):
     """Select area"""
-    if event.widget != CANVAS:
+    if event.keycode != 65 and event.widget != CANVAS:
         return
+
     lines_toggle(on=True)
-    x = CANVAS.dragx
-    y = CANVAS.dragy
-    x2 = CANVAS.canvasx(event.x)
-    y2 = CANVAS.canvasy(event.y)
+    if event.keycode == 65:
+        x, y, x2, y2 = CANVAS.bbox(CANVAS.image_ref)
+        x += 2
+        y += 2
+        x2 -= 2
+        y2 -= 2
+    else:
+        x = CANVAS.dragx
+        y = CANVAS.dragy
+        x2 = CANVAS.canvasx(event.x)
+        y2 = CANVAS.canvasy(event.y)
     CANVAS.coords(CANVAS.lines[0], x, y, x2, y, x, y2, x2, y2)
     CANVAS.coords(CANVAS.lines[1], x, y, x2, y, x, y2, x2, y2)
     CANVAS.coords(CANVAS.lines[2], x, y2, x, y, x2, y2, x2, y)
@@ -670,6 +678,13 @@ def load_zip(path):
         if len(names) == 0:
             APP.im = None
             return
+
+        for s in APP.sort.split(","):
+            if s == "natural":
+                names.sort(key=natural_sort, reverse=APP.reverse)
+            elif s == "string":
+                names.sort(reverse=APP.reverse)
+
         APP.info["Names"] = names
         LOG.debug("Loading zip index %s", APP.i_zip)
         # pylint: disable=consider-using-with
@@ -960,7 +975,7 @@ def path_get(path: pathlib.Path | None = None) -> pathlib.Path:
     """Return shown path"""
     if path:
         return path
-    return APP.paths[max(APP.i_path, 0)]
+    return pathlib.Path(APP.paths[max(APP.i_path, 0)])
 
 
 @log_this
@@ -1587,8 +1602,8 @@ MENU = tkinter.Menu(APP, tearoff=0)
 
 BINDS = [
     (path_open, "p P F2"),
-    (clipboard_copy, "Control-c Control-Insert"),
-    (clipboard_paste, "Control-v Shift-Insert"),
+    (clipboard_copy, "Control-c Control-C Control-Insert"),
+    (clipboard_paste, "Control-v Control-V Shift-Insert"),
     (path_save, "s S F12"),
     (delete_file, "d D Delete"),
     "--",
@@ -1619,7 +1634,7 @@ BINDS = [
     (scroll, "Control-Left Control-Right Control-Up Control-Down"),
     (scroll_toggle, "Scroll_Lock"),
     (select, "B2-Motion"),
-    (select, "Control-a"),
+    (select, "Control-a Control-A"),
     (drag_begin, "ButtonPress"),
     (drag_end, "ButtonRelease"),
     (fit_handler, "r R"),
