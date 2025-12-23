@@ -9,6 +9,7 @@ by Cees Timmerman
 2024-04-10 AVIF, JXL, SVG support.
 2024-04-25 Photoshop IRB, XMP, exiftool support.
 2024-06-19 Windows WYSIWYG copy like PrtScr.
+2025-12-23 Select all as displayed.
 """
 
 # pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, no-member, too-many-boolean-expressions, too-many-branches, too-many-lines, too-many-locals, too-many-nested-blocks, too-many-statements, unused-argument, unused-import, wrong-import-position
@@ -452,6 +453,19 @@ def select(event):
         y = CANVAS.dragy
         x2 = CANVAS.canvasx(event.x)
         y2 = CANVAS.canvasy(event.y)
+        w = CANVAS.winfo_width()
+        h = CANVAS.winfo_height()
+        px = CANVAS.winfo_pointerx() - CANVAS.winfo_rootx()
+        py = CANVAS.winfo_pointery() - CANVAS.winfo_rooty()
+        if px < 0:
+            CANVAS.xview_scroll(-int(SCROLL_SPEED), "units")
+        elif px > w:
+            CANVAS.xview_scroll(int(SCROLL_SPEED), "units")
+        if py < 0:
+            CANVAS.yview_scroll(-int(SCROLL_SPEED), "units")
+        elif py > h:
+            CANVAS.yview_scroll(int(SCROLL_SPEED), "units")
+
     CANVAS.coords(CANVAS.lines[0], x, y, x2, y, x, y2, x2, y2)
     CANVAS.coords(CANVAS.lines[1], x, y, x2, y, x, y2, x2, y2)
     CANVAS.coords(CANVAS.lines[2], x, y2, x, y, x2, y2, x2, y)
