@@ -434,6 +434,7 @@ def drag(event):
     CANVAS.dragx, CANVAS.dragy = evx, evy
 
 
+@log_this
 def select(event):
     """Select area"""
     if event.widget != CANVAS:
@@ -666,10 +667,10 @@ def load_zip(path):
         names = zf.namelist()
         if APP.filter_names:
             names = list(filter(has_supported_extension, names))
-        APP.info["Names"] = names
         if len(names) == 0:
             APP.im = None
             return
+        APP.info["Names"] = names
         LOG.debug("Loading zip index %s", APP.i_zip)
         # pylint: disable=consider-using-with
         APP.im = Image.open(zf.open(names[APP.i_zip]))
@@ -1618,6 +1619,7 @@ BINDS = [
     (scroll, "Control-Left Control-Right Control-Up Control-Down"),
     (scroll_toggle, "Scroll_Lock"),
     (select, "B2-Motion"),
+    (select, "Control-a"),
     (drag_begin, "ButtonPress"),
     (drag_end, "ButtonRelease"),
     (fit_handler, "r R"),
