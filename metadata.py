@@ -329,25 +329,30 @@ def info_exiftool(path: pathlib.Path) -> str:
         return ""
     s = ""
     try:
-        output = subprocess.run(
-            [
-                "exiftool",
-                "-duplicates",
-                "-groupHeadings",
-                "-unknown2",
-                # "-charset", "filename=utf8",  # Breaks finding regular files on Windows 10 but doesn't matter for Hebrew names.
-                path,
-            ],
-            capture_output=True,
-            check=False,
-            text=False,
-        )  # text=False to avoid dead thread with uncatchable UnicodeDecodeError: 'charmap' codec can't decode byte 0x8f in position 1749: character maps to <undefined> like https://github.com/smarnach/pyexiftool/issues/20
-        # Output for D:\\art\\__original_drawn_by_pink_ocean__e48c8d8c99313c1f4a86f35f8795c44b.jpg is not utf8, shift-jis, euc_jp, ISO-2022-JP, utf-16-le, or utf-16-be! Not latin1 either but that decodes.
-        s += (
-            output.stdout
-            and output.stdout.decode("ansi", errors="replace").replace("\r", "")
-            or ""
-        ) + output.stderr.decode("ansi", errors="replace").replace("\r", "")
+        for encoding in ("utf8", "latin"):
+            output = subprocess.run(
+                [
+                    "exiftool",
+                    "-duplicates",
+                    "-groupHeadings",
+                    "-unknown2",
+                    "-charset",
+                    f"filename={encoding}",
+                    path,
+                ],
+                capture_output=True,
+                check=False,
+                text=False,
+            )  # text=False to avoid dead thread with uncatchable UnicodeDecodeError: 'charmap' codec can't decode byte 0x8f in position 1749: character maps to <undefined> like https://github.com/smarnach/pyexiftool/issues/20
+            s += (
+                output.stdout
+                and output.stdout.decode("ansi", errors="replace").replace("\r", "")
+                or ""
+            ) + output.stderr.decode("ansi", errors="replace").replace("\r", "")
+            if "RUNNING IN WINDOWS" in s or "No matching files" in s:
+                s = ""
+            else:
+                break
     except FileNotFoundError:
         LOG.debug("Exiftool not on PATH.")
     except UnicodeDecodeError as ex:
