@@ -515,7 +515,7 @@ def help_toggle(event=None):
                 "((^|[+])[a-z])",
                 lambda m: m.group(1).upper(),
                 re.sub(
-                    "([QTU])\\b",
+                    "([OQTV])\\b",
                     "Shift+\\1",
                     keys.replace("Key-", "")
                     .replace("Button-", "B")
@@ -1621,17 +1621,17 @@ MENU = tkinter.Menu(APP, tearoff=0)
 
 BINDS = [
     (path_open, "p P F2"),
+    (path_save, "s S F12"),
     (clipboard_copy, "Control-c Control-C Control-Insert"),
     (clipboard_paste, "Control-v Control-V Shift-Insert"),
-    (path_save, "s S F12"),
     (delete_file, "d D Delete"),
     "--",
     (browse_search, "F3"),
-    (paths_update, "u F5"),
+    (paths_update, "u U F5"),
     (refresh_toggle, "Control-u Control-U"),
     (set_order, "o O"),
-    (slideshow_toggle, "b Pause"),
-    (browse_archive_toggle, "z"),
+    (slideshow_toggle, "b B Pause"),
+    (browse_archive_toggle, "z Z"),
     (animation_toggle, "a A"),
     (browse_frame, "comma period"),
     (browse_mouse, "MouseWheel"),
@@ -1647,8 +1647,8 @@ BINDS = [
     "--",
     (fullscreen_toggle, "f F F11 Alt-Return"),
     (close, "Escape"),
-    (zoom_text, "Alt-equal Alt-plus Alt-minus Alt-MouseWheel"),
     (zoom, "0 equal plus minus Control-MouseWheel"),
+    (zoom_text, "Alt-equal Alt-plus Alt-minus Alt-MouseWheel"),
     (drag, "B1-Motion"),
     (scroll, "Control-Left Control-Right Control-Up Control-Down"),
     (scroll_toggle, "Scroll_Lock"),
