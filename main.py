@@ -9,7 +9,7 @@ by Cees Timmerman
 2024-04-10 AVIF, JXL, SVG support.
 2024-04-25 Photoshop IRB, XMP, exiftool support.
 2024-06-19 Windows WYSIWYG copy like PrtScr.
-2025-12-23 Select all as displayed.
+2025-12-24 Select all as displayed, and filter/reverse files.
 """
 
 # pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, no-member, too-many-boolean-expressions, too-many-branches, too-many-lines, too-many-locals, too-many-nested-blocks, too-many-statements, unused-argument, unused-import, wrong-import-position
@@ -307,6 +307,7 @@ def clipboard_paste(event=None):
     APP.im = im
     APP.info = {"Pasted": time.ctime()}
     APP.i_path = 0
+    APP.i_zip = 0
     APP.paths = ["pasted"]
     im_resize()
 
@@ -314,14 +315,15 @@ def clipboard_paste(event=None):
 def paths_set(paths: list | tuple):
     """Change paths"""
     APP.paths = [pathlib.Path(s) for s in paths]
+    APP.i_path = 0
+    APP.i_zip = 0
     LOG.debug("Set paths to %s", APP.paths)
     if not APP.paths:
         toast("No paths")
         return
     if len(APP.paths) == 1:
-        paths_update(None, APP.paths[0])
+        paths_update(None, APP.paths[0], open_folder=True)
         return
-    APP.i_path = 0
     im_load()
 
 
@@ -436,13 +438,13 @@ def drag(event):
 
 
 @log_this
-def select(event):
+def select(event=None):
     """Select area"""
-    if event.keycode != 65 and event.widget != CANVAS:
+    if event and event.keycode != 65 and event.widget != CANVAS:
         return
 
     lines_toggle(on=True)
-    if event.keycode == 65:
+    if not event or event.keycode == 65:
         x, y, x2, y2 = CANVAS.bbox(CANVAS.image_ref)
         x += 2
         y += 2
@@ -511,24 +513,25 @@ def help_toggle(event=None):
             if fun in ("-", drag_begin, drag_end, resize_handler):
                 continue
             key_part = "" if ": " in fun.__doc__ else ": "
-            key_part += re.sub(
-                "((^|[+])[a-z])",
-                lambda m: m.group(1).upper(),
-                re.sub(
-                    "([OQTV])\\b",
-                    "Shift+\\1",
-                    keys.replace("Key-", "")
-                    .replace("Button-", "B")
-                    .replace("Mouse", "")
-                    .replace("Control-", "Ctrl+")
-                    .replace("Alt-", "Alt+")
-                    .replace("Shift-", "Shift+")
-                    .replace(" Prior ", " PageUp ")
-                    .replace(" Next ", " PageDown "),
-                ),
-                count=0,
-                flags=re.MULTILINE,
-            )
+            if key_part:
+                key_part += re.sub(
+                    "((^|[+])[a-z])",
+                    lambda m: m.group(1).upper(),
+                    re.sub(
+                        "([OQTV])\\b",
+                        "Shift+\\1",
+                        keys.replace("Key-", "")
+                        .replace("Button-", "B")
+                        .replace("Mouse", "")
+                        .replace("Control-", "Ctrl+")
+                        .replace("Alt-", "Alt+")
+                        .replace("Shift-", "Shift+")
+                        .replace(" Prior ", " PageUp ")
+                        .replace(" Next ", " PageDown "),
+                    ),
+                    count=0,
+                    flags=re.MULTILINE,
+                )
             # Dedup case-sensitive shortcuts
             last_key = ""
             new_keys = []
@@ -589,7 +592,7 @@ def lines_toggle(event=None, on=None, off=None):
 
 
 def load_mhtml(path):
-    """Load EML/MHT/MHTML"""
+    """Load image from EML/MHT/MHTML"""
     with open(path, "r", encoding="utf8") as f:
         mhtml = f.read()
     boundary = re.search('boundary="(.+)"', mhtml).group(1)  # type: ignore
@@ -707,7 +710,11 @@ def load_zip(path):
         APP.info["Names"] = names
         LOG.debug("Loading zip index %s", APP.i_zip)
         # pylint: disable=consider-using-with
-        APP.im = Image.open(zf.open(names[APP.i_zip]))
+        try:
+            APP.im = Image.open(zf.open(names[APP.i_zip]))
+        except IndexError:
+            APP.i_zip = 0
+            APP.im = Image.open(zf.open(names[APP.i_zip]))
 
 
 def im_load(path=None):
@@ -934,21 +941,24 @@ def menu_init():
     """Create context menu"""
     for fun, keys in BINDS:
         if fun in (
+            browse_home,
+            browse_index,
             browse_mouse,
             browse_next,
             browse_prev,
             browse_percentage,
+            browse_search,
             close,
             drag,
             drag_begin,
             drag_end,
+            lines_toggle,
             menu_show,
             paths_down,
             paths_up,
             resize_handler,
             scroll,
             scroll_toggle,
-            select,
             zoom,
             zoom_text,
         ):
@@ -999,7 +1009,7 @@ def path_get(path: pathlib.Path | None = None) -> pathlib.Path:
 
 @log_this
 def path_open(event=None):
-    """Open file(s)..."""
+    """Open file..."""
     filenames = filedialog.askopenfilenames(filetypes=APP.SUPPORTED_FILES_READ)
     if filenames:
         paths_set(filenames)
@@ -1110,29 +1120,38 @@ def paths_up(event=None, path=None):
 
     p = pathlib.Path(path or ".")
     p = p.parent
-    paths_update(None, p.parent)
+    paths_update(None, p.parent, open_folder=True)
 
 
 def paths_down(event=None, path=None):
     """Enter folder"""
     APP.i_path = max(APP.i_path, 0)
     path = path_get(path)
-    paths_update(None, path)
+    paths_update(None, path, open_folder=True)
 
 
-def paths_update(event=None, path=None):
+def filter_toggle(event=None):
+    """No filter"""
+    APP.filter_names = not APP.filter_names
+    toast(f"Filter: {APP.filter_names}")
+    APP.after(1000, paths_update)
+
+
+def paths_update(event=None, path=None, open_folder=False):
     """Refresh"""
     path = path_get(path)
     p = pathlib.Path(path)
-    if APP.update_interval > 0 or not p.is_dir():
+    if not p.is_dir() or not open_folder:
         p = p.parent
     LOG.debug("Reading %s", p)
-    paths = list(filter(has_supported_extension, p.glob("*")))
+    if APP.filter_names:
+        paths = list(filter(has_supported_extension, p.glob("*")))
+    else:
+        paths = list(p.glob("*"))
     if paths:
         APP.paths = paths
-        APP.i_path = 0
+        APP.i_path = 0  # In case path is gone.
         LOG.debug("Found %s files.", len(APP.paths))
-        # LOG.debug("Filter?")
         paths_sort(path, reverse=APP.reverse)
     else:
         toast("Folder empty")
@@ -1627,6 +1646,7 @@ BINDS = [
     (delete_file, "d D Delete"),
     "--",
     (browse_search, "F3"),
+    (filter_toggle, "n N"),
     (paths_update, "u U F5"),
     (refresh_toggle, "Control-u Control-U"),
     (set_order, "o O"),
@@ -1652,8 +1672,7 @@ BINDS = [
     (drag, "B1-Motion"),
     (scroll, "Control-Left Control-Right Control-Up Control-Down"),
     (scroll_toggle, "Scroll_Lock"),
-    (select, "B2-Motion"),
-    (select, "Control-a Control-A"),
+    (select, "B2-Motion Control-a Control-A"),
     (drag_begin, "ButtonPress"),
     (drag_end, "ButtonRelease"),
     (fit_handler, "r R"),
@@ -1717,6 +1736,9 @@ def main():
         type=str,
     )
     parser.add_argument("-m", "--maximize", action="store_true", help="maximize window")
+    parser.add_argument(
+        "-n", "--nofilter", action="store_true", help="try all file names"
+    )
     parser.add_argument(
         "-o",
         "--order",
@@ -1803,6 +1825,9 @@ def main():
 
     if args.maximize:
         APP.state("zoomed")
+
+    if args.nofilter:
+        APP.filter_names = False
 
     if args.update:
         APP.update_interval = args.update
