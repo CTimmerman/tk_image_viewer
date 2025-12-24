@@ -21,7 +21,7 @@ To see more metadata, add the 11 MB [exiftool](https://exiftool.org/) folder pat
 ## Use
 
 ```pre
-usage: tk_image_viewer [-h] [-b [ms]] [-f] [-g WxH+X+Y] [-m] [-o ORDER] [-q N] [-r [N]] [-t N] [-u [ms]] [-v] [-z] [path]
+usage: tk_image_viewer [-h] [-b [ms]] [-f] [-g WxH+X+Y] [-m] [-n] [-o ORDER] [-q N] [-r [N]] [-t N] [-u [ms]] [-v] [-z] [path]
 
 positional arguments:
   path
@@ -33,6 +33,7 @@ options:
   -g, --geometry WxH+X+Y
                         set window geometry, eg -g +0+-999
   -m, --maximize        maximize window
+  -n, --nofilter        try all file names
   -o, --order ORDER     sort order. [NATURAL|string|random|mtime|ctime|size]
   -q, --quality N       set antialiasing level (0-5, default 0)
   -r, --resize [N]      resize image to fit window (0-3: none, all, big, small. default 1)
@@ -45,12 +46,13 @@ options:
 Binds:
 
 ```pre
-Open file(s): P F2
+Open file: P F2
 Save as: S F12
 Copy: Ctrl+C Ctrl+Insert
 Paste: Ctrl+V Ctrl+Shift+V Shift+Insert
 Delete: D Delete
 Find: F3
+No filter: N
 Refresh: U F5
 Autorefresh: Ctrl+U
 Order: O Shift+O
@@ -64,7 +66,7 @@ Previous: Left Up PageUp B4
 First: 1 Home Alt+Left
 Last: End Alt+Right
 Index: G F4
-0 to 90% of list: Shift+0-9Key
+0 to 90% of list: Shift+0-9
 Random: X
 Enter folder: Return
 Leave folder: BackSpace
