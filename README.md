@@ -46,14 +46,14 @@ Binds:
 
 ```pre
 Open file(s): P F2
-Copy: Ctrl+C Ctrl+Insert
-Paste: Ctrl+V Shift+Insert
 Save as: S F12
+Copy: Ctrl+C Ctrl+Insert
+Paste: Ctrl+V Ctrl+Shift+V Shift+Insert
 Delete: D Delete
 Find: F3
 Refresh: U F5
-Autorefresh: Shift+U
-Order: O
+Autorefresh: Ctrl+U
+Order: O Shift+O
 Slideshow: B Pause
 Browse archives: Z
 Animation: A
@@ -64,24 +64,24 @@ Previous: Left Up PageUp B4
 First: 1 Home Alt+Left
 Last: End Alt+Right
 Index: G F4
-0 to 90% of list: Shift+0-9
+0 to 90% of list: Shift+0-9Key
 Random: X
 Enter folder: Return
 Leave folder: BackSpace
 Fullscreen: F F11 Alt+Return
 Exit fullscreen or app: Escape
-Zoom text: Alt+Equal Alt+Plus Alt+Minus Alt+Wheel
 Zoom: 0 equal plus minus Ctrl+Wheel
+Zoom text: Alt+Equal Alt+Plus Alt+Minus Alt+Wheel
 Drag image: B1-Motion
 Scroll: Ctrl+Left Ctrl+Right Ctrl+Up Ctrl+Down
 Scroll lock: Scroll_Lock
-Select area: B2-Motion
+Select area: B2-Motion Ctrl+A
 Resize: R
 Resize quality: Q Shift+Q
 Background color: C
 Transpose: T Shift+T
 Line overlay: L
-Verbosity: V
+Verbosity: V Shift+V
 Menu: B3 F10
 Help: H F1
 Info: I
