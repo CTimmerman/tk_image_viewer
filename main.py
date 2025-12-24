@@ -510,32 +510,37 @@ def help_toggle(event=None):
         for fun, keys in BINDS:
             if fun in ("-", drag_begin, drag_end, resize_handler):
                 continue
-            lines.append(
-                fun.__doc__.replace("...", "")
-                + (
-                    ""
-                    if ": " in fun.__doc__
-                    else ": "
-                    + re.sub(
-                        "((^|[+])[a-z])",
-                        lambda m: m.group(1).upper(),
-                        re.sub(
-                            "([QTU])\\b",
-                            "Shift+\\1",
-                            keys.replace("Key-", "")
-                            .replace("Button-", "B")
-                            .replace("Mouse", "")
-                            .replace("Control-", "Ctrl+")
-                            .replace("Alt-", "Alt+")
-                            .replace("Shift-", "Shift+")
-                            .replace(" Prior ", " PageUp ")
-                            .replace(" Next ", " PageDown "),
-                        ),
-                        count=0,
-                        flags=re.MULTILINE,
-                    )
-                )
+            key_part = "" if ": " in fun.__doc__ else ": "
+            key_part += re.sub(
+                "((^|[+])[a-z])",
+                lambda m: m.group(1).upper(),
+                re.sub(
+                    "([QTU])\\b",
+                    "Shift+\\1",
+                    keys.replace("Key-", "")
+                    .replace("Button-", "B")
+                    .replace("Mouse", "")
+                    .replace("Control-", "Ctrl+")
+                    .replace("Alt-", "Alt+")
+                    .replace("Shift-", "Shift+")
+                    .replace(" Prior ", " PageUp ")
+                    .replace(" Next ", " PageDown "),
+                ),
+                count=0,
+                flags=re.MULTILINE,
             )
+            # Dedup case-sensitive shortcuts
+            last_key = ""
+            new_keys = []
+            for key in key_part.split(" "):
+                if key == last_key:
+                    pass
+                else:
+                    last_key = key
+                    new_keys.append(key)
+
+            lines.append(fun.__doc__.replace("...", "") + " ".join(new_keys))
+
         msg = "\n".join(lines)
         info_set(msg)
         info_show()
@@ -1119,7 +1124,7 @@ def paths_update(event=None, path=None):
     """Refresh"""
     path = path_get(path)
     p = pathlib.Path(path)
-    if not p.is_dir():
+    if APP.update_interval > 0 or not p.is_dir():
         p = p.parent
     LOG.debug("Reading %s", p)
     paths = list(filter(has_supported_extension, p.glob("*")))
@@ -1623,7 +1628,7 @@ BINDS = [
     "--",
     (browse_search, "F3"),
     (paths_update, "u F5"),
-    (refresh_toggle, "U"),
+    (refresh_toggle, "Control-u Control-U"),
     (set_order, "o O"),
     (slideshow_toggle, "b Pause"),
     (browse_archive_toggle, "z"),
