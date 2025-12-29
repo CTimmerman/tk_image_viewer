@@ -74,10 +74,9 @@ VERBOSITY_LEVELS = [
     logging.DEBUG,
 ]
 
-# Add a handler to stream to sys.stderr warnings from all modules.
-logging.basicConfig(format="%(levelname)s: %(message)s")
-# Add a logging namespace.
-LOG = logging.getLogger(TITLE)
+# Set log line format. Force to override submodules.
+logging.basicConfig(format="%(levelname)s: %(message)s")  # , force=True)
+LOG = logging.getLogger(__name__)
 
 register_heif_opener()
 
@@ -742,11 +741,11 @@ def im_load(path=None):
             n = APP.im.n_frames
             if n > 1:
                 APP.info["Frames"] = n
-                duration = 0
+                duration: int = 0
                 # for frame in range(n - 1, -1, -1):  # 116 GIF frames in 15.45s vs 0.21s!
                 for frame in range(n):
                     APP.im.seek(frame)
-                    duration += APP.im.info.get("duration", 100) or 100
+                    duration += int(APP.im.info.get("duration", 100)) or 100
                 APP.im.seek(0)
                 APP.info["duration"] = f"{duration} ms"
                 if APP.b_animate:
@@ -829,7 +828,9 @@ def im_resize(loop: bool = False):
         except EOFError as ex:
             LOG.error("IMAGE EOF. %s", ex)
         # 10 FPS default; nice and round.
-        duration = APP.im.info.get("duration", 100) or 100
+        duration = (
+            int(APP.im.info.get("duration", 100)) or 100
+        )  # apng have float ms duration?!
         # Cancel existing timer.
         if hasattr(APP, "animation"):
             APP.after_cancel(APP.animation)
@@ -1433,8 +1434,11 @@ def set_verbosity(event=None):
     if APP.verbosity > logging.CRITICAL:
         APP.verbosity = logging.DEBUG
 
-    logging.basicConfig(level=APP.verbosity)  # Show up in nested shells in Windows 11.
-    LOG.setLevel(APP.verbosity)
+    # Includes 3rd-party modules
+    logging.getLogger().setLevel(APP.verbosity)
+    # Supposed best way
+    # LOG.setLevel(APP.verbosity)
+    # logging.getLogger('metadata').setLevel(APP.verbosity)
     s = "Log level %s" % logging.getLevelName(LOG.getEffectiveLevel())
     toast(s)
     print(s)

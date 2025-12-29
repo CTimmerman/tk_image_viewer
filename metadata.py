@@ -11,9 +11,6 @@ from typing import Literal, cast
 import yaml
 from PIL import ExifTags, Image, ImageCms, IptcImagePlugin, TiffTags
 
-# Add a handler to stream to sys.stderr warnings from all modules.
-logging.basicConfig(format="%(levelname)s: %(message)s")
-# Add a logging namespace.
 LOG = logging.getLogger(__name__)
 
 ByteOrderType = Literal["big", "little"]
@@ -328,8 +325,15 @@ def info_exiftool(path: pathlib.Path) -> str:
     if not path:
         return ""
     s = ""
+    # ExifTool can't handle emoji like: 💢
+    # https://github.com/exiftool/exiftool/issues/375
+    # import os
+    # os.environ["PERL_UNICODE"] = "UTF8"
     try:
-        for encoding in ("utf8", "latin"):
+        for encoding in (
+            "utf8",
+            "latin",
+        ):  # latin should be covered by unicode but exiftool with utf8 gives "Invalid filename encoding" for some Japanese names.
             output = subprocess.run(
                 [
                     "exiftool",
@@ -338,7 +342,7 @@ def info_exiftool(path: pathlib.Path) -> str:
                     "-unknown2",
                     "-charset",
                     f"filename={encoding}",
-                    path,
+                    str(path),
                 ],
                 capture_output=True,
                 check=False,
@@ -346,10 +350,15 @@ def info_exiftool(path: pathlib.Path) -> str:
             )  # text=False to avoid dead thread with uncatchable UnicodeDecodeError: 'charmap' codec can't decode byte 0x8f in position 1749: character maps to <undefined> like https://github.com/smarnach/pyexiftool/issues/20
             s += (
                 output.stdout
-                and output.stdout.decode("ansi", errors="replace").replace("\r", "")
+                and output.stdout.decode("utf8", errors="replace").replace("\r", "")
                 or ""
-            ) + output.stderr.decode("ansi", errors="replace").replace("\r", "")
-            if "RUNNING IN WINDOWS" in s or "No matching files" in s:
+            ) + output.stderr.decode("utf8", errors="replace").replace("\r", "")
+            if (
+                "RUNNING IN WINDOWS" in s
+                or "No matching files" in s
+                or "Unkown Unicode option letter" in s
+            ):
+                LOG.warning("ExifTool failed: %s", s)
                 s = ""
             else:
                 break
