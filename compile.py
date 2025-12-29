@@ -4,7 +4,7 @@ import subprocess
 from time import strftime
 
 timestamp = strftime("%y%j")  # max 5 digits for Nuitka.
-VERSION = f"1.1.0.{timestamp}"
+VERSION = f"1.1.1.{timestamp}"
 
 # ============================ MyPyC =================================
 # mypyc main.py
