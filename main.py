@@ -1435,10 +1435,9 @@ def set_verbosity(event=None):
         APP.verbosity = logging.DEBUG
 
     # Includes 3rd-party modules
-    logging.getLogger().setLevel(APP.verbosity)
-    # Supposed best way
-    # LOG.setLevel(APP.verbosity)
-    # logging.getLogger('metadata').setLevel(APP.verbosity)
+    # logging.getLogger().setLevel(APP.verbosity)
+    LOG.setLevel(APP.verbosity)
+    logging.getLogger("metadata").setLevel(APP.verbosity)
     s = "Log level %s" % logging.getLevelName(LOG.getEffectiveLevel())
     toast(s)
     print(s)
