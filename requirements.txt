@@ -1,6 +1,5 @@
 defusedxml>=0.7.1  # PIL\Image.py:1496: UserWarning: XMP data cannot be read without defusedxml dependency
 pillow>=12.0.0
-pillow-avif-plugin>=1.5.2
 pillow-heif>=1.1.1
 pillow-jxl-plugin>=1.3.5
 pygame>=2.6.1  # Render SVG
