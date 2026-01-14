@@ -1,2 +1,2 @@
 @echo off
-pip install -r requirements.txt --upgrade
+python -m pip install -r requirements.txt --upgrade

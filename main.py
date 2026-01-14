@@ -18,6 +18,7 @@ from io import BytesIO
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Optional
 
+# pyrefly: ignore[unused-import]  # Also in the toml but VS Code still marks it!
 import pillow_jxl  # noqa: F401
 import pyperclip  # type: ignore
 from PIL import GifImagePlugin, Image, ImageGrab, ImageTk
@@ -1804,7 +1805,7 @@ def main():
     set_verbosity()
 
     LOG.debug("Args: %s", args)
-    APP.paths = []
+    APP.paths: list[pathlib.Path] = []
 
     set_supported_files()
 
