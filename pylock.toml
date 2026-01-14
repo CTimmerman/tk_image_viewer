@@ -57,15 +57,15 @@ url = "https://files.pythonhosted.org/packages/4d/02/c663f0a38fd8358ae6bc58cfcdd
 sha256 = "23aca25bea7fc63e0466ceba12e6ddb26ce3685943185b7f6801c376f96832ed"
 
 [[packages]]
-name = "pygame"
-version = "2.6.1"
+name = "pygame-ce"
+version = "2.5.6"
 
 [[packages.wheels]]
-name = "pygame-2.6.1-cp313-cp313-win_amd64.whl"
-url = "https://files.pythonhosted.org/packages/7e/11/17f7f319ca91824b86557e9303e3b7a71991ef17fd45286bf47d7f0a38e6/pygame-2.6.1-cp313-cp313-win_amd64.whl"
+name = "pygame_ce-2.5.6-cp313-cp313-win_amd64.whl"
+url = "https://files.pythonhosted.org/packages/2d/d9/1d16eff301bda4b22d1d19eda966cfbc9bf174648e4af85dee8c5ffb72cf/pygame_ce-2.5.6-cp313-cp313-win_amd64.whl"
 
 [packages.wheels.hashes]
-sha256 = "813af4fba5d0b2cb8e58f5d95f7910295c34067dcc290d34f1be59c48bd1ea6a"
+sha256 = "c38f17313b27ad97f0578ba863972b6e1fe22b1ec8568af6c7785b5bd55d21e1"
 
 [[packages]]
 name = "pyperclip"
