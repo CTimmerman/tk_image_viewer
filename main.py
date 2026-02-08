@@ -13,7 +13,7 @@ by Cees Timmerman
 """
 
 # pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, no-member, too-many-boolean-expressions, too-many-branches, too-many-lines, too-many-locals, too-many-nested-blocks, too-many-statements, unused-argument, unused-import, wrong-import-position
-import argparse, base64, enum, functools, gzip, logging, os, pathlib, random, re, sys, time, tkinter, zipfile  # noqa: E401
+import argparse, base64, enum, functools, gzip, logging, os, pathlib, random, re, sys, tarfile, time, tkinter, zipfile  # noqa: E401
 from io import BytesIO
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Optional
@@ -281,7 +281,7 @@ def clipboard_copy(event=None):
             clipboard.copy(im)
             toast("Copied selection")
         except ImportError as ex:
-            LOG.error(ex)
+            LOG.error("Clipboard error: %s", ex)
             toast(f"{ex}")
     else:
         LOG.debug("Copying path")
@@ -362,7 +362,7 @@ def config_save():
             fp.seek(0)
             fp.write(s)
     except IOError as ex:
-        LOG.error(ex)
+        LOG.error("Config save error: %s", ex)
 
 
 @log_this
@@ -687,7 +687,46 @@ def has_supported_extension(name: str | pathlib.Path):
     for ext in APP.SUPPORTED_EXTENSIONS:
         if str(name).upper().endswith(ext):
             return True
+    # LOG.debug(f"Excluding {name}; not endswith {APP.SUPPORTED_EXTENSIONS}")
     return False
+
+
+def load_tar(path):
+    """Load file from tar with optional compression"""
+    with tarfile.open(path, "r") as tf:
+        names = tf.getnames()
+        LOG.debug("Contains %s names", len(names))
+        if APP.filter_names:
+            names = list(filter(has_supported_extension, names))
+        LOG.debug("of which %s images", len(names))
+        if len(names) == 0:
+            raise ValueError("No image found")
+
+        for s in APP.sort.split(","):
+            if s == "natural":
+                names.sort(key=natural_sort, reverse=APP.reverse)
+            elif s == "string":
+                names.sort(reverse=APP.reverse)
+
+        APP.info["Names"] = names
+        try:
+            name = names[APP.i_zip]
+        except IndexError:
+            LOG.info("Can't read tar index %s/%s", APP.i_zip, len(names))
+            APP.i_zip = 0
+            name = names[0]
+
+        LOG.debug("Loading tar index %s: %s", APP.i_zip, name)
+        im_fp = tf.extractfile(name)
+        LOG.debug("Loading im file %s", im_fp)
+        if not im_fp:
+            raise TypeError(f"Not an image: {name}")
+        APP.im = Image.open(im_fp)
+        fmt = APP.im.format
+        # No-copy APP.im works only while stepping through, else ValueError: I/O operation on closed file
+        # copy loses format
+        APP.im = APP.im.copy()  # type: ignore
+        APP.im.format = fmt
 
 
 def load_zip(path):
@@ -732,6 +771,10 @@ def im_load(path=None):
                 load_svg(path)
             elif path.suffix in (".eml", ".mht", ".mhtml"):
                 load_mhtml(path)
+            elif path.suffix in (".tar", ".tbz2", ".tgz", ".txz") or "".join(
+                path.suffixes[-2:]
+            ) in (".tar.bz2", ".tar.gz", ".tar.xz", ".tar.zst", ".tar.zstd"):
+                load_tar(path)
             else:
                 APP.im = Image.open(path)
                 APP.im.load()  # Else im.info = {} for AVIF.
@@ -767,6 +810,8 @@ def im_load(path=None):
             err_msg = "Press enter to open folder:"
         else:
             err_msg = f"{type(ex).__name__}: {ex}"
+            if LOG.level == logging.DEBUG:
+                raise ex
         APP.im = None
         msg = f"{msg} {err_msg}{f' {path}' if repr(str(path)) not in err_msg and str(path) not in err_msg else ''}"
 
@@ -886,7 +931,7 @@ def im_show(im):
 
     msg = (
         f"{APP.i_path+1}/{len(APP.paths)}{zip_info} {('%sx%s' % APP.im.size) if APP.im else ''}"
-        f" @ {'%sx%s' % im.size} {path_get()}"
+        f"->{'%sx%s' % im.size} {path_get()}"
     )
     APP.title(msg + " - " + TITLE)
     if APP.showing == "info" and (
@@ -909,10 +954,7 @@ def info_toggle(event=None, show: bool | None = None):
         APP.showing = "info"
         CANVAS.config(cursor="watch")
         info_set(
-            APP.title()[: -len(" - " + TITLE)]
-            + info_get(
-                APP.im, APP.info, APP.paths[APP.i_path if APP.i_path >= 0 else 0]
-            )
+            APP.title()[: -len(" - " + TITLE)] + info_get(APP.im, APP.info, path_get())
         )
         LOG.debug("Showing info:\n%s", CANVAS.itemcget(CANVAS.text, "text"))  # type: ignore
         info_show()
@@ -1053,7 +1095,9 @@ def path_save(event=None, filename=None, newmode=None, noexif=False):
             del im_info["exif"]
 
         del im_info["duration"]  # Only contains one frame.
-        # print("XXX: Saving", im_info)
+        LOG.debug("Saving info: %s", im_info)
+        if save_all and filename.endswith("webp"):
+            del im_info["background"]
         im.save(
             filename,
             None,  # Let Pillow handle ".jfif" -> JPEG
@@ -1093,6 +1137,7 @@ def paths_sort(path=None, reverse=False):
         if s == "natural":
             APP.paths.sort(key=natural_sort, reverse=reverse)
         elif s == "ctime":
+            # only mtime in zip
             APP.paths.sort(key=os.path.getmtime, reverse=reverse)
         elif s == "mtime":
             APP.paths.sort(key=os.path.getmtime, reverse=reverse)
@@ -1297,7 +1342,7 @@ def scrollbars_set():
             CANVAS.yview_moveto(0)
             APP.i_scroll = APP.i_path
     except TypeError as ex:
-        LOG.error(ex)
+        LOG.error("Scrollbar error: %s", ex)
 
 
 def set_bg(event=None):
@@ -1363,8 +1408,33 @@ def set_supported_files():
     exts[".mhtml"] = "MHTML"
     exts[".svg"] = "SVG"
     exts[".svgz"] = "SVG"
+    exts[".tar"] = "TAR"
+    exts[".tar.bz2"] = "TAR"
+    exts[".tbz2"] = "TAR"
+    exts[".tar.gz"] = "TAR"
+    exts[".tgz"] = "TAR"
+    exts[".tar.xz"] = "TAR"
+    exts[".txz"] = "TAR"
+    exts[".tar.zst"] = "TAR"
+    exts[".tar.zstd"] = "TAR"
     exts[".zip"] = "ZIP"
-    added_exts = ["EML", "MHT", "MHTML", "SVG", "SVGZ", "ZIP"]
+    added_exts = [
+        "EML",
+        "MHT",
+        "MHTML",
+        "SVG",
+        "SVGZ",
+        "TAR",
+        "TAR.BZ2",
+        "TAR.GZ",
+        "TAR.XZ",
+        "TAR.ZST",
+        "TAR.ZSTD",
+        "TBZ2",
+        "TGZ",
+        "TXZ",
+        "ZIP",
+    ]
 
     APP.SUPPORTED_EXTENSIONS = sorted(
         [k[1:].upper() for k, v in exts.items() if v in Image.OPEN] + added_exts
@@ -1381,7 +1451,10 @@ def set_supported_files():
             ),
         ),
         ("All files", "*"),
-        ("Archives", ".eml .mht .mhtml .zip"),
+        (
+            "Archives",
+            ".eml .mht .mhtml .tar .tar.bz2 .tbz2 .tar.gz .tgz .tar.xz .txz .tar.zst .tar.zstd .zip",
+        ),
         *sorted(
             (k, v) for k, v in type_exts.items() if k in Image.OPEN or k in added_exts
         ),

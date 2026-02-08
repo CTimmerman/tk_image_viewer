@@ -187,7 +187,7 @@ def info_get(im: Image.Image, info: dict, path: pathlib.Path | None = None) -> s
     for k, v in info.items():
         # jfif attribute is just hex version in decimal.
         if k in (
-            "dpi",
+            # "dpi",
             "exif",
             "icc_profile",
             "jfif",
@@ -203,12 +203,15 @@ def info_get(im: Image.Image, info: dict, path: pathlib.Path | None = None) -> s
         elif k == "adobe_transform":
             v = {1: "YCbCr"}.get(v, v)
         elif k == "comment":
-            try:
-                v = v.decode("utf8")
-            except UnicodeDecodeError:
-                v = v.decode("utf_16_be")
+            # Binary string repr unless decoded. \xf6 is ANSI o umlaut. ASCII is covered by UTF8.
+            for codec in ("utf8", "utf_16_be", "ansi"):
+                try:
+                    v = v.decode(codec)
+                    break
+                except UnicodeDecodeError:
+                    pass
         elif k == "gamma":
-            v = f"{v}" + f" ({1/v:.1f})" if 0 < v < 1 else ""
+            v = f"{v}" + f" ({1/v:.1f})" if 0 < v < 1 else f"{v}"
         elif k == "jfif_unit":
             v = {0: "none", 1: "inch", 2: "cm"}.get(v, v)
         elif k == "jfif_version":
