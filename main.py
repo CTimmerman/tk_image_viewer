@@ -1466,18 +1466,16 @@ def set_supported_files():
         ),
         *sorted((k, v) for k, v in type_exts.items() if k in Image.SAVE),
     ]
-
-    LOG.debug("Supports %s", ", ".join(s[1:].upper() for s in sorted(list(exts))))
     LOG.debug(
-        "Open: %s",
+        "Opens:\n%s",
         ", ".join(APP.SUPPORTED_EXTENSIONS),
     )
     LOG.debug(
-        "Save: %s",
+        "Saves:\n%s",
         ", ".join(sorted(k[1:].upper() for k, v in exts.items() if v in Image.SAVE)),
     )
     LOG.debug(
-        "Save all frames: %s",
+        "Saves all frames:\n%s",
         ", ".join(
             sorted(k[1:].upper() for k, v in exts.items() if v in Image.SAVE_ALL)
         ),
