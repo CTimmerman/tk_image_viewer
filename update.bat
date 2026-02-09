@@ -1,4 +1,7 @@
-CALL python -m pip install --upgrade pip
+REM pymanager install --configure
+REM py upgrade 3.13
+REM set PATH="C:\Users\C\AppData\Local\Python\pythoncore-3.13-64;%PATH%"
+python -m pip install --upgrade pip
 CALL install_dev
 CALL install
-CALL python -m pip lock -r requirements.txt -o pylock.toml
+python -m pip lock -r requirements.txt -o pylock.toml
