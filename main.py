@@ -1095,16 +1095,32 @@ def path_save(event=None, filename=None, newmode=None, noexif=False):
         im_info = im.info.copy()
         if noexif:
             del im_info["exif"]
-
-        if filename.endswith(".gif"):
+        ext = filename.split(".")[-1].lower()
+        if ext == "avif":
             if "duration" not in im_info:
                 LOG.warning("No duration; using 20.")
                 im_info["duration"] = 20
-        if filename.endswith(".gif"):
+        elif ext == "gif":
             del im_info["duration"]  # Only contains one frame.
-        LOG.debug("Saving info: %s", im_info)
-        if save_all and filename.endswith("webp"):
+        elif ext == "inta":
+            im = im.convert("LA")
+        elif ext in (
+            "jpg",
+            "mpo",
+            "ppm",
+            "rgb",
+            "sgi",
+        ):  # and im.mode != "RGB": should be handled by convert()
+            im = im.convert("RGB")
+        elif ext == "rgba" or (
+            ext == "jxl" and im.mode not in ("RGB", "RGBA", "L", "LA")
+        ):
+            im = im.convert("RGBA")
+        elif ext in ("bw", "int", "msp", "xbm"):
+            im = im.convert("1")
+        elif save_all and filename.endswith("webp"):
             del im_info["background"]
+        LOG.debug("Saving info: %s", im_info)
         im.save(
             filename,
             None,  # Let Pillow handle ".jfif" -> JPEG
@@ -1474,12 +1490,15 @@ def set_supported_files():
         *sorted((k, v) for k, v in type_exts.items() if k in Image.SAVE),
     ]
     LOG.debug(
-        "Opens:\n%s",
+        "Opens %s:\n%s",
+        len(APP.SUPPORTED_EXTENSIONS),
         ", ".join(APP.SUPPORTED_EXTENSIONS),
     )
+    saves = sorted(k[1:].upper() for k, v in exts.items() if v in Image.SAVE)
     LOG.debug(
-        "Saves:\n%s",
-        ", ".join(sorted(k[1:].upper() for k, v in exts.items() if v in Image.SAVE)),
+        "Saves %s:\n%s",
+        len(saves),
+        ", ".join(saves),
     )
     LOG.debug(
         "Saves all frames:\n%s",
