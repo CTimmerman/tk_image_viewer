@@ -1,2 +1,2 @@
 python compile.py
-dist-nuitka\tiv eye.ico
+dist-nuitka\tiv -vv eye.ico
