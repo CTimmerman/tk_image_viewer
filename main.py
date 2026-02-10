@@ -18,6 +18,8 @@ from io import BytesIO
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Optional
 
+import pillow_avif  # type: ignore  # noqa: F401  # pylint: disable=E0401
+
 # pyrefly: ignore[unused-import]  # Also in the toml but VS Code still marks it!
 import pillow_jxl  # noqa: F401
 import pyperclip  # type: ignore
