@@ -26,7 +26,6 @@ from PIL.Image import Transpose
 from pillow_heif import register_heif_opener  # type: ignore
 from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
 
-
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 import pygame  # noqa: E402
 
@@ -779,6 +778,7 @@ def im_load(path=None):
                 APP.im = Image.open(path)
                 APP.im.load()  # Else im.info = {} for AVIF.
         APP.info.update(**APP.im.info)
+        LOG.debug("Metadata %s", APP.info)
         APP.im_frame = 0
         if hasattr(APP.im, "n_frames"):
             n = APP.im.n_frames
@@ -872,10 +872,10 @@ def im_resize(loop: bool = False):
             APP.im.seek(APP.im_frame)
         except EOFError as ex:
             LOG.error("IMAGE EOF. %s", ex)
-        # 10 FPS default; nice and round.
-        duration = (
-            int(APP.im.info.get("duration", 100)) or 100
-        )  # apng have float ms duration?!
+        # 50 FPS max. 10 FPS default.
+        duration = max(
+            20, int(APP.im.info.get("duration", 100)) or 100
+        )  # apng have float ms duration!
         # Cancel existing timer.
         if hasattr(APP, "animation"):
             APP.after_cancel(APP.animation)
@@ -1094,7 +1094,12 @@ def path_save(event=None, filename=None, newmode=None, noexif=False):
         if noexif:
             del im_info["exif"]
 
-        del im_info["duration"]  # Only contains one frame.
+        if filename.endswith(".gif"):
+            if "duration" not in im_info:
+                LOG.warning("No duration; using 20.")
+                im_info["duration"] = 20
+        if filename.endswith(".gif"):
+            del im_info["duration"]  # Only contains one frame.
         LOG.debug("Saving info: %s", im_info)
         if save_all and filename.endswith("webp"):
             del im_info["background"]
@@ -1380,7 +1385,7 @@ def set_order(event=None):
     s = "Sort: " + APP.sort + (" reverse" if APP.reverse else "")
     LOG.info(s)
     toast(s)
-    paths_sort(reverse=APP.reverse)  # type:ignore
+    paths_sort(reverse=APP.reverse)  # type: ignore
 
 
 def set_stats(path):
