@@ -1,5 +1,6 @@
 black>=25.11.0
 pre-commit>=4.4.0
 pylint>=4.0.3
-nuitka>=2.8.6  #,!=4.0
+# nuitka>=2.8.6  #,!=4.0
+nuitka @ https://github.com/Nuitka/Nuitka/archive/develop.zip
 types-PyYAML>=6.0.12.20250915
