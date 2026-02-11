@@ -10,20 +10,27 @@ by Cees Timmerman
 2024-04-25 Photoshop IRB, XMP, exiftool support.
 2024-06-19 Windows WYSIWYG copy like PrtScr.
 2025-12-24 Select all as displayed, and filter/reverse files.
+2026-02-11 1.2.0; tar support.
 """
 
-# pylint: disable=consider-using-f-string, global-statement, line-too-long, multiple-imports, no-member, too-many-boolean-expressions, too-many-branches, too-many-lines, too-many-locals, too-many-nested-blocks, too-many-statements, unused-argument, unused-import, wrong-import-position
+# pylint: disable=consider-using-f-string, global-statement, line-too-long, logging-fstring-interpolation, multiple-imports, no-member, too-many-boolean-expressions, too-many-branches, too-many-lines, too-many-locals, too-many-nested-blocks, too-many-statements, unused-argument, unused-import, wrong-import-position
 import argparse, base64, enum, functools, gzip, logging, os, pathlib, random, re, sys, tarfile, time, tkinter, zipfile  # noqa: E401
 from io import BytesIO
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Optional
 
-import pillow_avif  # type: ignore  # noqa: F401  # pylint: disable=E0401
+# import pillow_avif  # type: ignore  # noqa: F401  # pylint: disable=E0401
 
 # pyrefly: ignore[unused-import]  # Also in the toml but VS Code still marks it!
 import pillow_jxl  # noqa: F401
 import pyperclip  # type: ignore
-from PIL import GifImagePlugin, Image, ImageGrab, ImageTk
+
+from PIL import (
+    GifImagePlugin,
+    Image,
+    ImageGrab,
+    ImageTk,
+)
 from PIL.Image import Transpose
 from pillow_heif import register_heif_opener  # type: ignore
 from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
@@ -32,6 +39,8 @@ os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 import pygame  # noqa: E402
 
 from metadata import info_get  # noqa: E402
+
+Image.init()  # Populate Image.EXTENSION and have Nuitka include AVIF and 4+ other formats aside from 50+ included due to partially initialized Image?
 
 GifImagePlugin.LOADING_STRATEGY = (
     GifImagePlugin.LoadingStrategy.RGB_AFTER_DIFFERENT_PALETTE_ONLY
@@ -1061,7 +1070,7 @@ def path_open(event=None):
 
 
 @log_this
-def path_save(event=None, filename=None, newmode=None, noexif=False):
+def path_save(event=None, filename: str = "", newmode: str = "", noexif: bool = False):
     """Save as..."""
     if "Names" in APP.info:
         p = pathlib.Path(str(path_get()) + "." + APP.info["Names"][APP.i_zip])
@@ -1080,8 +1089,13 @@ def path_save(event=None, filename=None, newmode=None, noexif=False):
     im = APP.im.convert(newmode) if newmode else APP.im
     save_all = hasattr(im, "n_frames") and im.n_frames > 1
     fmt = filename.split(".")[-1].upper()
-    if fmt == "JPG":
-        fmt = "JPEG"
+    try:
+        fmt = [
+            item for item in APP.SUPPORTED_FILES_WRITE if "." + fmt.lower() in item[1]
+        ][1][0]
+    except IndexError:
+        LOG.debug("Unknown format: %s", fmt)
+
     if save_all and fmt not in Image.SAVE_ALL:
         if not messagebox.askokcancel(
             "Lose Frames",
@@ -1091,34 +1105,37 @@ def path_save(event=None, filename=None, newmode=None, noexif=False):
         ):
             return
         save_all = False
+
     try:
         im_info = im.info.copy()
         if noexif:
             del im_info["exif"]
-        ext = filename.split(".")[-1].lower()
-        if ext == "avif":
+        ext = filename.split(".")[-1].upper()
+        if fmt == "AVIF":
             if "duration" not in im_info:
                 LOG.warning("No duration; using 20.")
                 im_info["duration"] = 20
-        elif ext == "gif":
-            del im_info["duration"]  # Only contains one frame.
-        elif ext == "inta":
+        elif ext == "GIF":
+            if "duration" in im_info:
+                # Else this frame's would be applied to all.
+                del im_info["duration"]
+        elif ext == "INTA":
             im = im.convert("LA")
-        elif ext in (
-            "jpg",
-            "mpo",
-            "ppm",
-            "rgb",
-            "sgi",
+        elif fmt == "JPEG" or ext in (
+            "MPO",
+            "RGB",
+            "SGI",
         ):  # and im.mode != "RGB": should be handled by convert()
             im = im.convert("RGB")
-        elif ext == "rgba" or (
-            ext == "jxl" and im.mode not in ("RGB", "RGBA", "L", "LA")
+        elif ext == "RGBA" or (
+            ext == "JXL" and im.mode not in ("RGB", "RGBA", "L", "LA")
         ):
             im = im.convert("RGBA")
-        elif ext in ("bw", "int", "msp", "xbm"):
+        elif ext in ("BW", "INT"):
+            im = im.convert("L")
+        elif ext in ("MSP", "XBM"):
             im = im.convert("1")
-        elif save_all and filename.endswith("webp"):
+        elif save_all and fmt == "WEBP":
             del im_info["background"]
         LOG.debug("Saving info: %s", im_info)
         im.save(
@@ -1141,9 +1158,6 @@ def path_save(event=None, filename=None, newmode=None, noexif=False):
             "Lose EXIF", f"{ex}. Retry without it?", icon=messagebox.WARNING, parent=APP
         ):
             path_save(filename=filename, newmode=newmode, noexif=True)
-            return
-        if str(ex) == "cannot write mode RGBA as JPEG":
-            path_save(filename=filename, newmode="RGB", noexif=noexif)
             return
         raise
 
@@ -1490,22 +1504,18 @@ def set_supported_files():
         *sorted((k, v) for k, v in type_exts.items() if k in Image.SAVE),
     ]
     LOG.debug(
-        "Opens %s:\n%s",
+        "Reads %s formats:\n%s",
         len(APP.SUPPORTED_EXTENSIONS),
         ", ".join(APP.SUPPORTED_EXTENSIONS),
     )
     saves = sorted(k[1:].upper() for k, v in exts.items() if v in Image.SAVE)
     LOG.debug(
-        "Saves %s:\n%s",
+        "Writes %s formats:\n%s",
         len(saves),
         ", ".join(saves),
     )
-    LOG.debug(
-        "Saves all frames:\n%s",
-        ", ".join(
-            sorted(k[1:].upper() for k, v in exts.items() if v in Image.SAVE_ALL)
-        ),
-    )
+    saves_all = sorted(k[1:].upper() for k, v in exts.items() if v in Image.SAVE_ALL)
+    LOG.debug(f"Saves all frames in {len(saves_all)} formats:\n{", ".join(saves_all)}")
 
 
 def quality_set(event=None):

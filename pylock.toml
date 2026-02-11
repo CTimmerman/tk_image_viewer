@@ -25,25 +25,14 @@ sha256 = "b36f1fef9334a5588b4166f8bcd26a14e521f2b55e6b9de3aaa80d3ff7a37529"
 
 [[packages]]
 name = "pillow"
-version = "12.1.0"
+version = "12.1.1"
 
 [[packages.wheels]]
-name = "pillow-12.1.0-cp313-cp313-win_amd64.whl"
-url = "https://files.pythonhosted.org/packages/e5/07/74a9d941fa45c90a0d9465098fe1ec85de3e2afbdc15cc4766622d516056/pillow-12.1.0-cp313-cp313-win_amd64.whl"
+name = "pillow-12.1.1-cp313-cp313-win_amd64.whl"
+url = "https://files.pythonhosted.org/packages/3f/eb/b0834ad8b583d7d9d42b80becff092082a1c3c156bb582590fcc973f1c7c/pillow-12.1.1-cp313-cp313-win_amd64.whl"
 
 [packages.wheels.hashes]
-sha256 = "461f9dfdafa394c59cd6d818bdfdbab4028b83b02caadaff0ffd433faf4c9a7a"
-
-[[packages]]
-name = "pillow-avif-plugin"
-version = "1.5.5"
-
-[[packages.wheels]]
-name = "pillow_avif_plugin-1.5.5-cp313-cp313-win_amd64.whl"
-url = "https://files.pythonhosted.org/packages/87/07/d432621fabce0c1eea7b92cf47186961a1c9605d7a23c0f54d25b35822c7/pillow_avif_plugin-1.5.5-cp313-cp313-win_amd64.whl"
-
-[packages.wheels.hashes]
-sha256 = "1831d3d75671e1c0a936ffceb98bc9fb52972088de7e4f7ec8ffb4478e241f62"
+sha256 = "344cf1e3dab3be4b1fa08e449323d98a2a3f819ad20f4b22e77a0ede31f0faa1"
 
 [[packages]]
 name = "pillow-heif"
