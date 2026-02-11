@@ -1,2 +1,2 @@
 #!/bin/sh
-exec python ./main.py ${1+"$@"} -r -vv
+exec python ./main.py -z ${1+"$@"}

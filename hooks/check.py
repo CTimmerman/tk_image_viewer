@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Cross-platform pre-commit hook"""
+
 import os
 import subprocess
 import sys

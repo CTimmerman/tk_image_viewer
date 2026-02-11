@@ -7,7 +7,6 @@ from ctypes.wintypes import BOOL, HANDLE, HWND, LPVOID, UINT
 
 from PIL import Image
 
-
 HGLOBAL = HANDLE
 SizeT = c_size_t
 GHND = 0x0042

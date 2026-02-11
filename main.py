@@ -25,11 +25,16 @@ from typing import Optional
 import pillow_jxl  # noqa: F401
 import pyperclip  # type: ignore
 
+# Import unused plugins for Nuitka to include AVIF, FITS, and QOI formats aside from 50+ included without a problem.
+# https://github.com/Nuitka/Nuitka/issues/3767
 from PIL import (
+    AvifImagePlugin,
+    FitsImagePlugin,
     GifImagePlugin,
     Image,
     ImageGrab,
     ImageTk,
+    QoiImagePlugin,
 )
 from PIL.Image import Transpose
 from pillow_heif import register_heif_opener  # type: ignore
@@ -40,7 +45,7 @@ import pygame  # noqa: E402
 
 from metadata import info_get  # noqa: E402
 
-Image.init()  # Populate Image.EXTENSION and have Nuitka include AVIF and 4+ other formats aside from 50+ included due to partially initialized Image?
+Image.init()  # Populate Image.EXTENSION
 
 GifImagePlugin.LOADING_STRATEGY = (
     GifImagePlugin.LoadingStrategy.RGB_AFTER_DIFFERENT_PALETTE_ONLY
