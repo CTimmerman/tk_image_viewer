@@ -27,7 +27,7 @@ for name in ("venv", ".venv"):
         break
 
 # Determine files to check
-files = sys.argv[1:] if len(sys.argv) > 1 else [repo_root]
+files = sys.argv[1:] if len(sys.argv) > 1 else ["*.py"]
 
 
 def run_cmd(cmd):
@@ -43,9 +43,7 @@ def run_cmd(cmd):
 black_exit = run_cmd([python_exe, "-m", "black", "--check"] + files)
 
 # Run Pylint
-pylint_exit = run_cmd(
-    [python_exe, "-m", "pylint", "-rn", "-sn", "--max-line-length", "300"] + files
-)
+pylint_exit = run_cmd([python_exe, "-m", "pylint", "--max-line-length", "300"] + files)
 
 # Exit with max return code to indicate failure if either fails
 sys.exit(max(black_exit, pylint_exit))
