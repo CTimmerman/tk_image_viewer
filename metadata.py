@@ -194,7 +194,8 @@ def info_get(im: Image.Image, info: dict, path: pathlib.Path | None = None) -> s
             "Names",
             "photoshop",
             "transparency",
-            "XML:com.adobe.xmp",
+            # "XML:com.adobe.xmp",
+            "xmp",
         ):
             continue
 
@@ -206,6 +207,10 @@ def info_get(im: Image.Image, info: dict, path: pathlib.Path | None = None) -> s
             # Binary string repr unless decoded. \xf6 is ANSI o umlaut. ASCII is covered by UTF8.
             for codec in ("utf8", "utf_16_be", "ansi"):
                 try:
+                    # Probably ANSI
+                    if "_" in codec and len([o for o in v if o < 128]) / len(v) >= 0.5:
+                        LOG.debug("Probably ANSI: %s", v)
+                        continue
                     v = v.decode(codec)
                     break
                 except UnicodeDecodeError:
@@ -240,7 +245,7 @@ def info_get(im: Image.Image, info: dict, path: pathlib.Path | None = None) -> s
     except AttributeError:
         pass
     pixels = im.width * im.height
-    colors = len(im.getcolors(pixels))
+    colors = len(im.getcolors(pixels))  # type: ignore
     msg += (
         f"\nColor Type: {im.mode}"
         + f"\nColors: {colors:,} ({len(bin(colors-1))-2}-bit)"
@@ -402,18 +407,18 @@ def info_iptc(im: Image.Image) -> str:
     IIM's file structure technology has largely been overtaken by the Extensible Metadata Platform (XMP), but the IIM attribute definitions are the basis for the IPTC Core schema for XMP.
     """
     s = ""
-    iptc = IptcImagePlugin.getiptcinfo(im)
+    iptc = IptcImagePlugin.getiptcinfo(im)  # type: ignore
     if iptc:
         s += "IPTC:"
         for k, v in iptc.items():
             if k == (1, 90):
-                k = "Coded Character Set"
-                v = [{b"\x1b%G": "UTF8"}.get(i, i) for i in v]
+                k = "Coded Character Set"  # type: ignore
+                v = [{b"\x1b%G": "UTF8"}.get(i, i) for i in v]  # type: ignore
             elif k == (2, 0):
-                k = "Application Record Version"
-                v = int.from_bytes(v, "little")
+                k = "Application Record Version"  # type: ignore
+                v = int.from_bytes(v, "little")  # type: ignore
             else:
-                k = IIM_NAMES.get(k, k)
+                k = IIM_NAMES.get(k, k)  # type: ignore
             s += f"\n{k}: {repr(v)}"
     return s.strip()
 

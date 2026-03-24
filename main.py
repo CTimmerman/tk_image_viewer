@@ -21,11 +21,14 @@ from typing import Optional
 
 # import pillow_avif  # type: ignore  # noqa: F401  # pylint: disable=E0401
 
+from pillow_heif import register_heif_opener  # type: ignore
+
 # pyrefly: ignore[unused-import]  # Also in the toml but VS Code still marks it!
+register_heif_opener()
 import pillow_jxl  # noqa: F401
 import pyperclip  # type: ignore
 
-# Import unused plugins for Nuitka to include AVIF, FITS, and QOI formats aside from 50+ included without a problem.
+# Import unused plugins for Nuitka to include AVIF, FITS, and QOI extensions aside from 50+ included without a problem.
 # https://github.com/Nuitka/Nuitka/issues/3767
 from PIL import (
     AvifImagePlugin,
@@ -37,7 +40,6 @@ from PIL import (
     QoiImagePlugin,
 )
 from PIL.Image import Transpose
-from pillow_heif import register_heif_opener  # type: ignore
 from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
@@ -50,6 +52,34 @@ Image.init()  # Populate Image.EXTENSION
 GifImagePlugin.LOADING_STRATEGY = (
     GifImagePlugin.LoadingStrategy.RGB_AFTER_DIFFERENT_PALETTE_ONLY
 )
+
+
+def test_save():
+    """pytest -s main.py"""
+    working_extensions = []
+    for ext, fmt in Image.EXTENSION.items():
+        if not fmt in Image.SAVE:
+            continue
+
+        for mode in ("1", "L", "P", "RGB", "RGBA"):
+            out = BytesIO()
+            out.name = "out" + ext
+            im = Image.new(mode, (1, 1))
+            try:
+                im.save(out)
+            except OSError as e:
+                if str(e).endswith(" handler not installed"):
+                    print(ext + ": Handler not installed")
+                    break
+            except (NotImplementedError, ValueError):
+                # Fixed in pending PIL PR.
+                continue
+            working_extensions.append(ext)
+            break
+        else:
+            print("Failed to save out.{ext}")
+
+    print(f"{len(working_extensions)} saving extensions: {working_extensions}")
 
 
 class Fits(enum.IntEnum):
@@ -92,8 +122,6 @@ VERBOSITY_LEVELS = [
 # Set log line format. Force to override submodules.
 logging.basicConfig(format="%(levelname)s: %(message)s")  # , force=True)
 LOG = logging.getLogger(__name__)
-
-register_heif_opener()
 
 
 def log_this(func):
@@ -697,7 +725,9 @@ def has_supported_extension(name: str | pathlib.Path):
     """To skip unsupported files"""
     if str(name).startswith("__MACOSX"):
         return False
-    if isinstance(name, pathlib.Path) and name.is_dir(follow_symlinks=True):
+    if (
+        isinstance(name, pathlib.Path) and name.is_dir()
+    ):  # follow_symlinks=True only works on Windows
         return True
     for ext in APP.SUPPORTED_EXTENSIONS:
         if str(name).upper().endswith(ext):
@@ -770,7 +800,7 @@ def load_zip(path):
             APP.im = Image.open(zf.open(names[APP.i_zip]))
 
 
-def im_load(path=None):
+def im_load(path=None) -> None:
     """Load image"""
     path = path_get(path)
     msg = f"{APP.i_path+1}/{len(APP.paths)}"
@@ -793,7 +823,7 @@ def im_load(path=None):
             else:
                 APP.im = Image.open(path)
                 APP.im.load()  # Else im.info = {} for AVIF.
-        APP.info.update(**APP.im.info)
+        APP.info.update(**APP.im.info)  # type: ignore
         LOG.debug("Metadata %s", APP.info)
         APP.im_frame = 0
         if hasattr(APP.im, "n_frames"):
@@ -1459,6 +1489,7 @@ def set_supported_files():
     exts[".txz"] = "TAR"
     exts[".tar.zst"] = "TAR"
     exts[".tar.zstd"] = "TAR"
+    exts[".tzst"] = "TAR"
     exts[".zip"] = "ZIP"
     added_exts = [
         "EML",
@@ -1475,6 +1506,7 @@ def set_supported_files():
         "TBZ2",
         "TGZ",
         "TXZ",
+        "TZST",
         "ZIP",
     ]
 
@@ -1509,18 +1541,20 @@ def set_supported_files():
         *sorted((k, v) for k, v in type_exts.items() if k in Image.SAVE),
     ]
     LOG.debug(
-        "Reads %s formats:\n%s",
+        "Reads %s extensions:\n%s",
         len(APP.SUPPORTED_EXTENSIONS),
         ", ".join(APP.SUPPORTED_EXTENSIONS),
     )
     saves = sorted(k[1:].upper() for k, v in exts.items() if v in Image.SAVE)
     LOG.debug(
-        "Writes %s formats:\n%s",
+        "Writes %s extensions:\n%s",
         len(saves),
         ", ".join(saves),
     )
     saves_all = sorted(k[1:].upper() for k, v in exts.items() if v in Image.SAVE_ALL)
-    LOG.debug(f"Saves all frames in {len(saves_all)} formats:\n{", ".join(saves_all)}")
+    LOG.debug(
+        f"Saves all frames in {len(saves_all)} extensions:\n{", ".join(saves_all)}"
+    )
 
 
 def quality_set(event=None):
@@ -1753,6 +1787,7 @@ ERROR_OVERLAY.place(x=0, y=0, relwidth=1, relheight=1)
 
 MENU = tkinter.Menu(APP, tearoff=0)
 
+# Touchpad zoom and page work on Windows and probably MacOS, but not Ubuntu 24.
 BINDS = [
     (path_open, "p P F2"),
     (path_save, "s S F12"),
@@ -1803,7 +1838,7 @@ BINDS = [
 ]
 
 
-def main():
+def main() -> None:
     """Main function"""
     APP.b_animate = True
     APP.b_lines = False
@@ -1917,7 +1952,7 @@ def main():
     set_verbosity()
 
     LOG.debug("Args: %s", args)
-    APP.paths: list[pathlib.Path] = []
+    APP.paths: list[pathlib.Path] = []  # type: ignore
 
     set_supported_files()
 

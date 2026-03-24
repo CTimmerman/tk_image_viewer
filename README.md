@@ -4,19 +4,30 @@ An image viewer that supports arrow keys, HEIC, WebP, foreign characters, long p
 
 On my Windows 11 it:
 
-Reads 88 formats:
-APNG, AVIF, AVIFS, BLP, BMP, BUFR, BW, CUR, DCX, DDS, DIB, EMF, EML, EPS, FIT, FITS, FLC, FLI, FTC, FTU, GBR, GIF, GRIB, H5, HDF, HEIC, HEICS, HEIF, HEIFS, HIF, ICB, ICNS, ICO, IIM, IM, J2C, J2K, JFIF, JP2, JPC, JPE, JPEG, JPF, JPG, JPX, JXL, MHT, MHTML, MPEG, MPG, MSP, PBM, PCD, PCX, PFM, PGM, PNG, PNM, PPM, PS, PSD, PXR, QOI, RAS, RGB, RGBA, SGI, SVG, SVGZ, TAR, TAR.BZ2, TAR.GZ, TAR.XZ, TAR.ZST, TAR.ZSTD, TBZ2, TGA, TGZ, TIF, TIFF, TXZ, VDA, VST, WEBP, WMF, XBM, XPM, ZIP
+Reads 91 extensions:
+APNG, AVIF, AVIFS, BLP, BMP, BUFR, BW, CUR, DCX, DDS, DIB, EMF, EML, EPS, FIT, FITS, FLC, FLI, FPX, FTC, FTU, GBR, GIF, GRIB, H5, HDF, HEIC, HEICS, HEIF, HEIFS, HIF, ICB, ICNS, ICO, IIM, IM, J2C, J2K, JFIF, JP2, JPC, JPE, JPEG, JPF, JPG, JPX, JXL, MHT, MHTML, MIC, MPEG, MPG, MSP, PBM, PCD, PCX, PFM, PGM, PNG, PNM, PPM, PS, PSD, PXR, QOI, RAS, RGB, RGBA, SGI, SVG, SVGZ, TAR, TAR.BZ2, TAR.GZ, TAR.XZ, TAR.ZST, TAR.ZSTD, TBZ2, TGA, TGZ, TIF, TIFF, TXZ, TZST, VDA, VST, WEBP, WMF, XBM, XPM, ZIP
 
-Writes 59 formats:
+Writes 59 extensions (assuming handlers for BUFR, H5, HDF, WMF, GRIB, and EMF are installed):
 APNG, AVIF, AVIFS, BLP, BMP, BUFR, BW, DDS, DIB, EMF, EPS, GIF, GRIB, H5, HDF, HEIC, HEICS, HEIF, HEIFS, HIF, ICB, ICNS, ICO, IM, J2C, J2K, JFIF, JP2, JPC, JPE, JPEG, JPF, JPG, JPX, JXL, MPO, MSP, PALM, PBM, PCX, PDF, PFM, PGM, PNG, PNM, PPM, PS, QOI, RGB, RGBA, SGI, TGA, TIF, TIFF, VDA, VST, WEBP, WMF, XBM
 
-Saves all frames in 15 formats:
+Saves all frames in 15 extensions:
 APNG, AVIF, AVIFS, GIF, HEIC, HEICS, HEIF, HEIFS, HIF, MPO, PDF, PNG, TIF, TIFF, WEBP
 
 ## Install/Update
 
+Windows:
+
 ```cmd
 install
+```
+
+Debian/Ubuntu/Mint:
+
+```sh
+python3 -m venv venv # optional
+. venv/bin/activate  # optional
+sudo apt install -y python3-tk
+sh install.sh
 ```
 
 Will take about 9.5 MB if the Python libs aren't already installed.

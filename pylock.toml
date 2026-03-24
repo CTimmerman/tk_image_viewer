@@ -13,6 +13,17 @@ url = "https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a8
 sha256 = "a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61"
 
 [[packages]]
+name = "olefile"
+version = "0.47"
+
+[[packages.wheels]]
+name = "olefile-0.47-py2.py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/17/d3/b64c356a907242d719fc668b71befd73324e47ab46c8ebbbede252c154b2/olefile-0.47-py2.py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "543c7da2a7adadf21214938bb79c83ea12b473a4b6ee4ad4bf854e7715e13d1f"
+
+[[packages]]
 name = "packaging"
 version = "26.0"
 
@@ -36,14 +47,14 @@ sha256 = "344cf1e3dab3be4b1fa08e449323d98a2a3f819ad20f4b22e77a0ede31f0faa1"
 
 [[packages]]
 name = "pillow-heif"
-version = "1.2.0"
+version = "1.3.0"
 
 [[packages.wheels]]
-name = "pillow_heif-1.2.0-cp313-cp313-win_amd64.whl"
-url = "https://files.pythonhosted.org/packages/63/0b/cb85f3c416c6734464ef5a3c40936256b9eb3ef7789698ca11fde102a508/pillow_heif-1.2.0-cp313-cp313-win_amd64.whl"
+name = "pillow_heif-1.3.0-cp313-cp313-win_amd64.whl"
+url = "https://files.pythonhosted.org/packages/63/0a/bb8435e127f75b434166022471bbabf11c8c1fc3d48c8595fd6ab36c2785/pillow_heif-1.3.0-cp313-cp313-win_amd64.whl"
 
 [packages.wheels.hashes]
-sha256 = "c28144e24bc8413c61f48a7887a6545aa3be59d3011b7fb22c315d2192a39ea6"
+sha256 = "17ecbbadfe10ea12a65c1c12354dc1ed8ae1e5d1b7092ea753641b029f7d6f9e"
 
 [[packages]]
 name = "pillow-jxl-plugin"
@@ -58,14 +69,14 @@ sha256 = "23aca25bea7fc63e0466ceba12e6ddb26ce3685943185b7f6801c376f96832ed"
 
 [[packages]]
 name = "pygame-ce"
-version = "2.5.6"
+version = "2.5.7"
 
 [[packages.wheels]]
-name = "pygame_ce-2.5.6-cp313-cp313-win_amd64.whl"
-url = "https://files.pythonhosted.org/packages/2d/d9/1d16eff301bda4b22d1d19eda966cfbc9bf174648e4af85dee8c5ffb72cf/pygame_ce-2.5.6-cp313-cp313-win_amd64.whl"
+name = "pygame_ce-2.5.7-cp313-cp313-win_amd64.whl"
+url = "https://files.pythonhosted.org/packages/06/a0/7acd164b3a206327bf53df5e5399227a5baf858ae2944cba562a0ae77e0a/pygame_ce-2.5.7-cp313-cp313-win_amd64.whl"
 
 [packages.wheels.hashes]
-sha256 = "c38f17313b27ad97f0578ba863972b6e1fe22b1ec8568af6c7785b5bd55d21e1"
+sha256 = "25047c97760fc640a6a8bbfdf3398c5825adfd55986a7523a65c95a1fb61d759"
 
 [[packages]]
 name = "pyperclip"

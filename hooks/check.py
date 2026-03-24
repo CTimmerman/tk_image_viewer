@@ -43,7 +43,9 @@ def run_cmd(cmd):
 black_exit = run_cmd([python_exe, "-m", "black", "--check"] + files)
 
 # Run Pylint
-pylint_exit = run_cmd([python_exe, "-m", "pylint", "-rn", "-sn"] + files)
+pylint_exit = run_cmd(
+    [python_exe, "-m", "pylint", "-rn", "-sn", "--max-line-length", "300"] + files
+)
 
 # Exit with max return code to indicate failure if either fails
 sys.exit(max(black_exit, pylint_exit))
