@@ -23,4 +23,4 @@ jobs:
         pip install -r requirements-dev.txt
     - name: Analysing the code
       run: |
-        python hooks/check.py
+        python hooks/check.py $(git ls-files '*.py')
