@@ -830,13 +830,17 @@ def im_load(path=None) -> None:
             n = APP.im.n_frames
             if n > 1:
                 APP.info["Frames"] = n
+                durations = []
                 duration: int = 0
                 # for frame in range(n - 1, -1, -1):  # 116 GIF frames in 15.45s vs 0.21s!
                 for frame in range(n):
                     APP.im.seek(frame)
-                    duration += int(APP.im.info.get("duration", 100)) or 100
+                    dur = int(APP.im.info.get("duration", 100)) or 100
+                    duration += dur
+                    durations.append(dur)
                 APP.im.seek(0)
                 APP.info["duration"] = f"{duration} ms"
+                APP.info["Frame durations"] = f"{set(durations)} ms"
                 if APP.b_animate:
                     APP.im_frame = -1  # Animation increments before displaying.
         im_resize(APP.b_animate)
@@ -1084,7 +1088,8 @@ def natural_sort(s: str):
     ['koko.gif', 'koko2.gif', 'koko 0004.gif']
     """
     return [
-        -1 if t == "." else int(t) if t.isdigit() else t.lower()
+        # '①②' isdigit but not int. https://stackoverflow.com/a/54912545/819417
+        -1 if t == "." else int(t) if t.isdecimal() else t.lower()
         for t in re.split(r"(\d+|[.])", str(s))
     ]
 
