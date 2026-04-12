@@ -430,6 +430,13 @@ def info_psd(im: Image.Image) -> str:
         return ""
     s = "Photoshop:\n"
     for k, v in info["photoshop"].items():
+        if (
+            k == 1036
+        ):  # PS5 thumbnail, https://www.awaresystems.be/imaging/tiff/tifftags/docs/photoshopthumbnail.html
+            continue
+        if k == 1061:
+            v = hex(v)
+
         readable_v = re.sub(r"(\\x..){2,}", " ", str(v)).replace(r"\\0", "")
         # readable_v = re.sub(
         #     r"\\0", "", re.sub(r"(\\x..){2,}", " ", str(v))
@@ -448,10 +455,6 @@ def info_psd(im: Image.Image) -> str:
             s += f"{PSD_RESOURCE_IDS.get(k, k)}: {(str(v)[:200] + '...') if len(str(v)) > 200 else v}\n"
         else:
             s += f"{PSD_RESOURCE_IDS.get(k, k)}: {readable_v[:200] + '...' if len(readable_v) > 200 else readable_v}\n"
-        if (
-            k == 1036
-        ):  # PS5 thumbnail, https://www.awaresystems.be/imaging/tiff/tifftags/docs/photoshopthumbnail.html
-            continue
 
     return s.strip()
 

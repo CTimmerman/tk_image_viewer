@@ -97,13 +97,28 @@ FOLDER = FOLDER = os.path.dirname(
 )
 CONFIG_FILE = os.path.join(FOLDER, "tiv.state")
 FONT_SIZE = 14
+# >>> min(timeit("im.resize((10,10), Image.Resampling.NEAREST)", globals=globals(), number=1000) for _ in range(1000))
+# 0.0024629998952150345
+# >>> min(timeit("im.resize((10,10), Image.Resampling.BOX)", globals=globals(), number=1000) for _ in range(1000))
+# 0.0034133000299334526
+# >>> min(timeit("im.resize((10,10), Image.Resampling.HAMMING)", globals=globals(), number=1000) for _ in range(1000))
+# 0.003803799976594746
+# >>> min(timeit("im.resize((10,10), Image.Resampling.BILINEAR)", globals=globals(), number=1000) for _ in range(1000))
+# 0.0034410000080242753
+# >>> min(timeit("im.resize((10,10), Image.Resampling.BICUBIC)", globals=globals(), number=1000) for _ in range(1000))
+# 0.003540600067935884
+# >>> min(timeit("im.resize((10,10), Image.Resampling.LANCZOS)", globals=globals(), number=1000) for _ in range(1000))
+# 0.0038410999113693833
 RESIZE_QUALITY = [
-    Image.Resampling.NEAREST,
-    Image.Resampling.BOX,
-    Image.Resampling.BILINEAR,
-    Image.Resampling.HAMMING,
-    Image.Resampling.BICUBIC,
-    Image.Resampling.LANCZOS,
+    # Low
+    Image.Resampling.NEAREST,  # 3s jaggy
+    # Image.Resampling.BOX,  # 5s less jaggy
+    # Image.Resampling.HAMMING,  # 5s blurry, jaggy
+    # Medium
+    Image.Resampling.BILINEAR,  # 4s blurry
+    Image.Resampling.BICUBIC,  # 4.5s bit blurry, ring
+    # High
+    Image.Resampling.LANCZOS,  # 5s best, ring
 ]
 SCALE_MIN = 0.001
 SCALE_MAX = 40.0
@@ -855,6 +870,7 @@ def im_load(path=None) -> None:
         OSError,  # NOSONAR
         PermissionError,  # NOSONAR
         BaseException,  # NOSONAR  # https://github.com/PyO3/pyo3/issues/3519
+        SyntaxError,  # Image data is syntax to some libs.
     ) as ex:
         if os.path.isdir(path):
             err_msg = "Press enter to open folder:"
@@ -1905,8 +1921,8 @@ def main() -> None:
         "-q",
         "--quality",
         metavar="N",
-        help="set antialiasing level (0-5, default 0)",
-        default=0,
+        help="set antialiasing level (0-3, default 1)",
+        default=1,
         type=int,
     )
     parser.add_argument(

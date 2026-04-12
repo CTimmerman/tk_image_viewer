@@ -51,7 +51,7 @@ options:
   -m, --maximize        maximize window
   -n, --nofilter        try all file names
   -o, --order ORDER     sort order. [NATURAL|string|random|mtime|ctime|size]
-  -q, --quality N       set antialiasing level (0-5, default 0)
+  -q, --quality N       set antialiasing level (0-3, default 1)
   -r, --resize [N]      resize image to fit window (0-3: none, all, big, small. default 1)
   -t, --transpose N     transpose 0-6 flip_left_right, flip_top_bottom, rotate_90, rotate_180, rotate_270, transpose, transverse
   -u, --update [ms]     update interval (default 4000)
