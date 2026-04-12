@@ -194,7 +194,7 @@ def info_get(im: Image.Image, info: dict, path: pathlib.Path | None = None) -> s
             "Names",
             "photoshop",
             "transparency",
-            # "XML:com.adobe.xmp",
+            "XML:com.adobe.xmp",
             "xmp",
         ):
             continue
