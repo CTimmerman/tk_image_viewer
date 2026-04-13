@@ -435,7 +435,7 @@ def info_psd(im: Image.Image) -> str:
         ):  # PS5 thumbnail, https://www.awaresystems.be/imaging/tiff/tifftags/docs/photoshopthumbnail.html
             continue
         if k == 1061:
-            v = hex(v)
+            v = v.hex()
 
         readable_v = re.sub(r"(\\x..){2,}", " ", str(v)).replace(r"\\0", "")
         # readable_v = re.sub(
