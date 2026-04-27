@@ -4,4 +4,4 @@ nuitka @ https://github.com/Nuitka/Nuitka/archive/develop.zip
 pre-commit>=4.4.0
 pylint>=4.0.3
 pytest>=9.0.2
-types-PyYAML>=6.0.12.20250915
+types-PyYAML>=6.0.12.20260408
