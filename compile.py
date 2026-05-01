@@ -4,7 +4,7 @@ import subprocess
 from time import strftime
 
 timestamp = strftime("%y%j")  # max 5 digits for Nuitka.
-VERSION = f"1.2.1.{timestamp}"
+VERSION = f"1.3.0.{timestamp}"
 
 
 # ================================ cx_Freeze ====================================
