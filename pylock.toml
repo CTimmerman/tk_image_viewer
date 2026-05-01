@@ -25,25 +25,25 @@ sha256 = "543c7da2a7adadf21214938bb79c83ea12b473a4b6ee4ad4bf854e7715e13d1f"
 
 [[packages]]
 name = "packaging"
-version = "26.0"
+version = "26.2"
 
 [[packages.wheels]]
-name = "packaging-26.0-py3-none-any.whl"
-url = "https://files.pythonhosted.org/packages/b7/b9/c538f279a4e237a006a2c98387d081e9eb060d203d8ed34467cc0f0b9b53/packaging-26.0-py3-none-any.whl"
+name = "packaging-26.2-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/df/b2/87e62e8c3e2f4b32e5fe99e0b86d576da1312593b39f47d8ceef365e95ed/packaging-26.2-py3-none-any.whl"
 
 [packages.wheels.hashes]
-sha256 = "b36f1fef9334a5588b4166f8bcd26a14e521f2b55e6b9de3aaa80d3ff7a37529"
+sha256 = "5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e"
 
 [[packages]]
 name = "pillow"
-version = "12.1.1"
+version = "12.2.0"
 
 [[packages.wheels]]
-name = "pillow-12.1.1-cp313-cp313-win_amd64.whl"
-url = "https://files.pythonhosted.org/packages/3f/eb/b0834ad8b583d7d9d42b80becff092082a1c3c156bb582590fcc973f1c7c/pillow-12.1.1-cp313-cp313-win_amd64.whl"
+name = "pillow-12.2.0-cp313-cp313-win_amd64.whl"
+url = "https://files.pythonhosted.org/packages/3f/82/8a3739a5e470b3c6cbb1d21d315800d8e16bff503d1f16b03a4ec3212786/pillow-12.2.0-cp313-cp313-win_amd64.whl"
 
 [packages.wheels.hashes]
-sha256 = "344cf1e3dab3be4b1fa08e449323d98a2a3f819ad20f4b22e77a0ede31f0faa1"
+sha256 = "390ede346628ccc626e5730107cde16c42d3836b89662a115a921f28440e6a3b"
 
 [[packages]]
 name = "pillow-heif"

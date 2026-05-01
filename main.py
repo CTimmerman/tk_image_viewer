@@ -28,7 +28,7 @@ register_heif_opener()
 import pillow_jxl  # noqa: F401
 import pyperclip  # type: ignore
 
-# Import unused plugins for Nuitka to include AVIF, FITS, and QOI extensions aside from 50+ included without a problem.
+# Import unused plugins for Nuitka <4.1 to include AVIF, FITS, and QOI extensions aside from 50+ included without a problem.
 # https://github.com/Nuitka/Nuitka/issues/3767
 from PIL import (
     AvifImagePlugin,
@@ -1114,7 +1114,11 @@ def path_get(path: pathlib.Path | None = None) -> pathlib.Path:
     """Return shown path"""
     if path:
         return path
-    return pathlib.Path(APP.paths[max(APP.i_path, 0)])
+    try:
+        return pathlib.Path(APP.paths[max(APP.i_path, 0)])
+    except IndexError:
+        APP.i_path = 0
+        return pathlib.Path(APP.paths[0] if len(APP.paths) > 0 else APP.dir)
 
 
 @log_this
@@ -1283,13 +1287,20 @@ def paths_update(event=None, path=None, open_folder=False):
     if not p.is_dir() or not open_folder:
         p = p.parent
     LOG.debug("Reading %s", p)
+    if hasattr(APP, "dir"):
+        keep_index = str(APP.dir) == str(p)
+    else:
+        keep_index = False
+    APP.dir = p
+
     if APP.filter_names:
         paths = list(filter(has_supported_extension, p.glob("*")))
     else:
         paths = list(p.glob("*"))
     if paths:
         APP.paths = paths
-        APP.i_path = 0  # In case path is gone.
+        if not keep_index:
+            APP.i_path = 0  # In case path is gone.
         LOG.debug("Found %s files.", len(APP.paths))
         paths_sort(path, reverse=APP.reverse)
     else:
