@@ -11,6 +11,7 @@ by Cees Timmerman
 2024-06-19 Windows WYSIWYG copy like PrtScr.
 2025-12-24 Select all as displayed, and filter/reverse files.
 2026-02-11 1.2.0; tar support.
+2026-09-26 1.4.0; rar support provided unrar is on PATH.
 """
 
 # pylint: disable=consider-using-f-string, global-statement, line-too-long, logging-fstring-interpolation, multiple-imports, no-member, too-many-boolean-expressions, too-many-branches, too-many-lines, too-many-locals, too-many-nested-blocks, too-many-statements, unused-argument, unused-import, wrong-import-position
@@ -18,6 +19,8 @@ import argparse, base64, enum, functools, gzip, logging, os, pathlib, random, re
 from io import BytesIO
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Optional
+
+import rarfile
 
 # import pillow_avif  # type: ignore  # noqa: F401  # pylint: disable=E0401
 
@@ -28,7 +31,7 @@ register_heif_opener()
 import pillow_jxl  # noqa: F401
 import pyperclip  # type: ignore
 
-# Import unused plugins for Nuitka to include AVIF, FITS, and QOI extensions aside from 50+ included without a problem.
+# Import unused plugins for Nuitka <4.1 to include AVIF, FITS, and QOI extensions aside from 50+ included without a problem.
 # https://github.com/Nuitka/Nuitka/issues/3767
 from PIL import (
     AvifImagePlugin,
@@ -751,6 +754,32 @@ def has_supported_extension(name: str | pathlib.Path):
     return False
 
 
+def load_rar(path):
+    """Load file from rar"""
+    with rarfile.RarFile(path, "r") as f:
+        names = f.namelist()
+        if APP.filter_names:
+            names = list(filter(has_supported_extension, names))
+        if len(names) == 0:
+            APP.im = None
+            return
+
+        for s in APP.sort.split(","):
+            if s == "natural":
+                names.sort(key=natural_sort, reverse=APP.reverse)
+            elif s == "string":
+                names.sort(reverse=APP.reverse)
+
+        APP.info["Names"] = names
+        LOG.debug("Loading rar index %s", APP.i_zip)
+        # pylint: disable=consider-using-with
+        try:
+            APP.im = Image.open(f.open(names[APP.i_zip]))
+        except IndexError:
+            APP.i_zip = 0
+            APP.im = Image.open(f.open(names[APP.i_zip]))
+
+
 def load_tar(path):
     """Load file from tar with optional compression"""
     with tarfile.open(path, "r") as tf:
@@ -825,13 +854,15 @@ def im_load(path=None) -> None:
     try:
         if path != "pasted":
             set_stats(path)
-            if path.suffix == ".zip":
+            if path.suffix in (".cbz", ".zip"):
                 load_zip(path)
+            elif path.suffix in (".cbr", ".rar"):
+                load_rar(path)
             elif path.suffix in (".svg", ".svgz"):
                 load_svg(path)
             elif path.suffix in (".eml", ".mht", ".mhtml"):
                 load_mhtml(path)
-            elif path.suffix in (".tar", ".tbz2", ".tgz", ".txz") or "".join(
+            elif path.suffix in (".cbt", ".tar", ".tbz2", ".tgz", ".txz") or "".join(
                 path.suffixes[-2:]
             ) in (".tar.bz2", ".tar.gz", ".tar.xz", ".tar.zst", ".tar.zstd"):
                 load_tar(path)
@@ -1114,7 +1145,11 @@ def path_get(path: pathlib.Path | None = None) -> pathlib.Path:
     """Return shown path"""
     if path:
         return path
-    return pathlib.Path(APP.paths[max(APP.i_path, 0)])
+    try:
+        return pathlib.Path(APP.paths[max(APP.i_path, 0)])
+    except IndexError:
+        APP.i_path = 0
+        return pathlib.Path(APP.paths[0] if len(APP.paths) > 0 else APP.dir)
 
 
 @log_this
@@ -1283,13 +1318,20 @@ def paths_update(event=None, path=None, open_folder=False):
     if not p.is_dir() or not open_folder:
         p = p.parent
     LOG.debug("Reading %s", p)
+    if hasattr(APP, "dir"):
+        keep_index = str(APP.dir) == str(p)
+    else:
+        keep_index = False
+    APP.dir = p
+
     if APP.filter_names:
         paths = list(filter(has_supported_extension, p.glob("*")))
     else:
         paths = list(p.glob("*"))
     if paths:
         APP.paths = paths
-        APP.i_path = 0  # In case path is gone.
+        if not keep_index:
+            APP.i_path = 0  # In case path is gone.
         LOG.debug("Found %s files.", len(APP.paths))
         paths_sort(path, reverse=APP.reverse)
     else:
@@ -1496,9 +1538,13 @@ def set_stats(path):
 def set_supported_files():
     """Set supported files"""
     exts = Image.registered_extensions()
+    exts[".cbr"] = "RAR"
+    exts[".cbt"] = "TAR"
+    exts[".cbz"] = "ZIP"
     exts[".eml"] = "MHTML"
     exts[".mht"] = "MHTML"
     exts[".mhtml"] = "MHTML"
+    exts[".rar"] = "RAR"
     exts[".svg"] = "SVG"
     exts[".svgz"] = "SVG"
     exts[".tar"] = "TAR"
@@ -1513,9 +1559,13 @@ def set_supported_files():
     exts[".tzst"] = "TAR"
     exts[".zip"] = "ZIP"
     added_exts = [
+        "CBR",
+        "CBT",
+        "CBZ",
         "EML",
         "MHT",
         "MHTML",
+        "RAR",
         "SVG",
         "SVGZ",
         "TAR",
@@ -1548,7 +1598,7 @@ def set_supported_files():
         ("All files", "*"),
         (
             "Archives",
-            ".eml .mht .mhtml .tar .tar.bz2 .tbz2 .tar.gz .tgz .tar.xz .txz .tar.zst .tar.zstd .zip",
+            ".cbr .cbt .cbz .eml .mht .mhtml .rar .tar .tar.bz2 .tbz2 .tar.gz .tgz .tar.xz .txz .tar.zst .tar.zstd .zip",
         ),
         *sorted(
             (k, v) for k, v in type_exts.items() if k in Image.OPEN or k in added_exts

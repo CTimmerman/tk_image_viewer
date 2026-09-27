@@ -5,3 +5,4 @@ python -m pip install --upgrade pip
 CALL install_dev
 CALL install
 python -m pip lock -r requirements.txt -o pylock.toml
+echo Remember to update the version in compile.py
