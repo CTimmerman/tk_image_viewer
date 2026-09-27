@@ -552,7 +552,8 @@ def error_show(msg: str):
     """Show error"""
     # Remove old image from help/info overlay.
     im_show(Image.new("1", (1, 1)))
-    APP.title(msg + " - " + TITLE)
+    APP.error_msg = msg
+    APP.title(APP.error_msg + " - " + TITLE)
     ERROR_OVERLAY.config(text=msg, fg="#00FF00" if "Press enter" in msg else "red")
     ERROR_OVERLAY.lift()
     APP.i_path_old = -1  # To refresh image info.
@@ -771,7 +772,7 @@ def load_rar(path):
                 names.sort(reverse=APP.reverse)
 
         APP.info["Names"] = names
-        LOG.debug("Loading rar index %s", APP.i_zip)
+        LOG.debug(f"Loading rar file {APP.i_zip + 1}/{len(names)}")
         # pylint: disable=consider-using-with
         try:
             APP.im = Image.open(f.open(names[APP.i_zip]))
@@ -1026,11 +1027,12 @@ def im_show(im):
             f" {APP.i_zip + 1}/{len(APP.info['Names'])} {APP.info['Names'][APP.i_zip]}"
         )
 
-    msg = (
+    APP.msg = (
         f"{APP.i_path+1}/{len(APP.paths)}{zip_info} {('%sx%s' % APP.im.size) if APP.im else ''}"
         f"->{'%sx%s' % im.size} {path_get()}"
     )
-    APP.title(msg + " - " + TITLE)
+    APP.error_msg = ""
+    APP.title(APP.msg + " - " + TITLE)
     if APP.showing == "info" and (
         not hasattr(APP, "i_path_old")
         or APP.i_path != APP.i_path_old
@@ -1040,7 +1042,7 @@ def im_show(im):
         APP.i_path_old = APP.i_path
         APP.i_zip_old = APP.i_zip
         CANVAS.config(cursor="watch")
-        info_set(msg + info_get(APP.im, APP.info, path_get()))
+        info_set(APP.msg + info_get(APP.im, APP.info, path_get()))
         CANVAS.config(cursor="")
     scrollbars_set()
 
@@ -1051,7 +1053,9 @@ def info_toggle(event=None, show: bool | None = None):
         APP.showing = "info"
         CANVAS.config(cursor="watch")
         info_set(
-            APP.title()[: -len(" - " + TITLE)] + info_get(APP.im, APP.info, path_get())
+            APP.msg
+            + (" " + APP.error_msg if APP.error_msg else "")
+            + info_get(APP.im, APP.info, path_get())
         )
         LOG.debug("Showing info:\n%s", CANVAS.itemcget(CANVAS.text, "text"))  # type: ignore
         info_show()
