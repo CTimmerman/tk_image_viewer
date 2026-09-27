@@ -6,5 +6,5 @@ pygame-ce>=2.5.7  # Render SVG
 pyperclip>=1.11.0
 pyyaml>=6.0.3  # Format XMP
 rarfile>=4.5
-tkinterdnd2>=0.4.3
+tkinterdnd2>=0.4.4.1
 olefile>=0.47
