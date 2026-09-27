@@ -1,4 +1,4 @@
-black>=25.11.0
+black>=26.5.1
 nuitka>=4.1
 # nuitka @ https://github.com/Nuitka/Nuitka/archive/develop.zip
 pre-commit>=4.6.0
