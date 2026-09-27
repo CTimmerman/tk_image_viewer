@@ -4,4 +4,4 @@ nuitka>=4.1
 pre-commit>=4.6.0
 pylint>=4.0.5
 pytest>=9.0.3
-types-PyYAML>=6.0.12.20250915
+types-PyYAML>=6.0.12.20260518
